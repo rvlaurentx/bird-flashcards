@@ -88,3 +88,15 @@ export async function mockGeocode(q) {
   const hits = base.filter((p) => p.name.toLowerCase().startsWith(q.toLowerCase()));
   return hits.length ? hits : [{ name: q, detail: "Demo place (mock mode)", lat: 40.0, lng: -75.0 }];
 }
+
+// Placeholder "photo" (inline SVG) so the study screen can be tried offline.
+export function mockMedia(sci, name) {
+  const hue = [...(sci || name)].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 375"><rect width="500" height="375" fill="hsl(${hue} 35% 55%)"/><text x="250" y="200" font-family="sans-serif" font-size="26" fill="#fff" text-anchor="middle">Sample photo (mock mode)</text></svg>`;
+  return {
+    taxonId: null, inatUrl: null,
+    photos: [{ url: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg), attribution: "(c) Sample photographer, some rights reserved (CC BY)", license: "CC-BY", page: null }],
+    summary: `${name || sci} is a sample species shown in mock mode. With real data this paragraph comes from Wikipedia via iNaturalist.`,
+    wikipediaUrl: null,
+  };
+}

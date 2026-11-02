@@ -56,13 +56,31 @@
         <span id="list-count" class="count"></span>
       </div>
       <p id="list-msg" class="msg" role="status"></p>
+      <button id="study-start" type="button" class="btn primary wide" hidden>Study these birds</button>
       <ol id="species" class="species"></ol>
-      <p class="fine">“Seen on” is the share of sampled complete checklists that reported the species. Flashcards for this list come next.</p>
+      <p class="fine">Percentages are the share of sampled complete checklists that reported the species. <span class="learned-dot" aria-hidden="true"></span> marks birds you've learned.</p>
+    </section>
+
+    <!-- Flashcard view -->
+    <section id="view-study" class="view" hidden>
+      <div class="study-top">
+        <button id="study-exit" class="link-btn" type="button">← Species list</button>
+        <span id="study-count" class="count"></span>
+      </div>
+      <div class="meter" aria-hidden="true"><i id="study-meter"></i></div>
+      <figure class="photo">
+        <div id="photo-frame" class="photo-frame"></div>
+        <figcaption id="photo-credit" class="credit"></figcaption>
+      </figure>
+      <div id="hints" class="hints" aria-live="polite"></div>
+      <div id="choices" class="choices" hidden></div>
+      <div id="answer" class="answer" aria-live="polite" hidden></div>
+      <div id="actions" class="actions"></div>
     </section>
   </main>
 
   <footer class="wrap foot">
-    Bird data from <a href="https://ebird.org" target="_blank" rel="noopener">eBird</a>, Cornell Lab of Ornithology. Place search by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>.
+    Bird data from <a href="https://ebird.org" target="_blank" rel="noopener">eBird</a>, Cornell Lab of Ornithology. Place search by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>. Photos from <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> observers (credited on each photo); descriptions from Wikipedia.
   </footer>
 
   <script type="module" src="/app.js"></script>

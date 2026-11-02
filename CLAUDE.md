@@ -28,7 +28,7 @@ the starter template.
 | Place name → coordinates | Open-Meteo geocoding API (free, no key) | In use: `api/places.js` |
 | Likely species for a place | eBird API 2.0 | In use: `api/species.js` |
 | Bird sounds | Xeno-canto API v3 | Planned. v3 needs an API key → serverless function + env var. Recordings have per-recording Creative Commons licenses (some NC/ND); store and show license + recordist. |
-| Photos | iNaturalist API (observation photos) | Planned. License varies per photo; filter to CC0/CC-BY/CC-BY-SA (CC-BY-NC only if the app stays non-commercial) and always show attribution. |
+| Photos + short description | iNaturalist API (taxon photos; `wikipedia_summary`) | In use: `api/media.js`, `api/_lib/inat.js`. Only CC0/CC-BY/CC-BY-SA/CC-BY-NC/CC-BY-NC-SA photos (`ALLOWED_LICENSES`); NC is allowed only while the app is non-commercial. The attribution string is shown under every photo. Taxon matched by scientific name, then common name (eBird and iNat names sometimes differ). |
 | Photos/audio (alt) | Macaulay Library | No open public API; media is generally not licensed for reuse in apps without permission. Check current terms before using. |
 
 Re-check current key requirements and license terms for each source before any
@@ -59,32 +59,41 @@ public release.
 
 ## Offline design
 - `public/sw.js`: app shell precached; `/api/*` network-first with cache
-  fallback (any place opened before works offline); Google Fonts cached.
+  fallback (any place opened before works offline); Google Fonts cached;
+  iNaturalist photos cache-first (`media-v1`, ~400 max), so birds you've
+  already studied keep their photos offline.
 - Next: an explicit **"Download trip deck"** action that stores the species
   list, chosen photos and audio for a trip in a dedicated cache (plus deck
   metadata/progress in IndexedDB), shows the download size first, and lets
   the user delete old decks. Bump `VERSION` in `sw.js` when shell files change.
 
-## Learning design (to confirm with the user)
-These were discussed in earlier planning but details weren't written down.
-Record the agreed version here.
-- **Hint progression** (proposed): photo → family → size relative to a
-  familiar bird → key field mark → habitat/behavior → song/call → reveal.
-  Fewer hints used = stronger recall credit for spaced repetition.
-- **Confusable-species grouping** (proposed): quiz distractors and "compare"
-  cards come from (a) the same eBird family in the trip list, plus (b) a
-  curated list of classic confusion pairs (e.g. Downy vs Hairy Woodpecker,
-  House vs Purple Finch, Cooper's vs Sharp-shinned Hawk), limited to species
-  actually on the trip list.
-- Prioritize study by trip frequency: learn the commonest birds first.
+## Learning design (confirmed by the user)
+Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
+- **Hint progression:** photo → family → size relative to a familiar bird →
+  key field mark → habitat/behavior → song/call → reveal. Fewer hints used =
+  stronger recall credit.
+  - *Implemented today:* photo → family → genus → multiple choice
+    (look-alikes) → reveal. Size, field marks, habitat and song need a data
+    source we don't have yet; slot them into `hintsFor()` when added.
+- **Confusable-species grouping:** choices come from (a) curated confusion
+  pairs (`CONFUSION_PAIRS`, eBird codes), (b) same eBird family on the trip
+  list, then (c) taxonomically nearest species, all limited to the place's list.
+- **Spaced repetition (Leitner boxes 0–5, per species, shared across trips):**
+  known with no hints → box +1; known with hints → no promotion (min 1);
+  missed → box 0 and the card returns 3 cards later in the same session.
+  Box ≥ 3 = "learned" (dot in the species list). Sessions order cards weakest
+  first, then commonest on the trip. Progress is in localStorage (`bf-progress`);
+  move to IndexedDB with the trip-deck work.
+- Photos rotate between reviews so you learn the bird, not one picture.
 
 ## Roadmap
 1. ✅ Place → ranked species list (eBird, serverless, cached)
-2. Flashcard flow (photo → hints → answer; spaced repetition)
-3. Audio (Xeno-canto)
-4. Photos (iNaturalist, licensed + attributed)
+2. ✅ Flashcard flow (photo → hints → answer; spaced repetition)
+3. ✅ Photos (iNaturalist, licensed + attributed) — pulled forward; cards need them
+4. Audio (Xeno-canto) — also enables the "song/call" hint
 5. Offline trip decks (download, manage, study with no signal)
-6. Optional: month-of-trip frequencies; Play Store wrapper
+6. Hint data for size / field marks / habitat (source to be decided)
+7. Optional: month-of-trip frequencies; Play Store wrapper
 
 ## Conventions
 - Vanilla HTML/CSS/ES modules, no framework or bundler (keep it simple until

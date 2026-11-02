@@ -1,29 +1,21 @@
-// Bird Flashcards — step 1: place search → ranked species list from eBird.
+// Bird Flashcards — place search → ranked species list → flashcards.
 
-const $ = (s) => document.querySelector(s);
+import { $, api, load, save } from "./lib.js";
+import { LEARNED_BOX } from "./learn.js";
+import { startSession, getProgress } from "./study.js";
+
 const RECENT_KEY = "bf-recent-places";
 const state = { place: null, data: null, top: 25 };
 
 // ---------- storage (per-device conveniences only) ----------
-function getRecent() { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; } }
+const getRecent = () => load(RECENT_KEY, []);
 function addRecent(p) {
-  const list = [p, ...getRecent().filter((r) => !(r.lat === p.lat && r.lng === p.lng))].slice(0, 6);
-  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* storage unavailable */ }
-}
-
-// ---------- api ----------
-async function api(path) {
-  const res = await fetch(path);
-  let body = null;
-  try { body = await res.json(); } catch { /* not JSON */ }
-  if (!res.ok) throw new Error(body?.error || (navigator.onLine ? `Request failed (${res.status}).` : "You're offline and this place isn't saved on this device yet."));
-  return body;
+  save(RECENT_KEY, [p, ...getRecent().filter((r) => !(r.lat === p.lat && r.lng === p.lng))].slice(0, 6));
 }
 
 // ---------- views ----------
 function show(view) {
-  $("#view-search").hidden = view !== "search";
-  $("#view-list").hidden = view !== "list";
+  for (const v of ["search", "list", "study"]) $(`#view-${v}`).hidden = view !== v;
   window.scrollTo(0, 0);
 }
 
@@ -66,6 +58,7 @@ async function openPlace(p) {
   $("#list-meta").textContent = p.detail || "";
   $("#species").replaceChildren();
   $("#list-count").textContent = "";
+  $("#study-start").hidden = true;
   const msg = $("#list-msg");
   msg.className = "msg"; msg.textContent = "Reading recent eBird checklists… this can take a few seconds.";
   try {
@@ -80,10 +73,17 @@ async function openPlace(p) {
   } catch (e) { msg.className = "msg error"; msg.textContent = e.message; }
 }
 
+const visible = () => { const all = state.data?.species || []; return state.top ? all.slice(0, state.top) : all; };
+
 function renderSpecies() {
   const all = state.data?.species || [];
-  const list = state.top ? all.slice(0, state.top) : all;
-  $("#list-count").textContent = `${list.length} of ${all.length} species`;
+  const list = visible();
+  const progress = getProgress();
+  const learned = list.filter((sp) => (progress[sp.code]?.box ?? 0) >= LEARNED_BOX).length;
+  $("#list-count").textContent = `${list.length} of ${all.length} species · ${learned} learned`;
+  const btn = $("#study-start");
+  btn.hidden = !list.length;
+  btn.textContent = `Study these ${list.length} birds`;
   $("#species").replaceChildren(...list.map((sp, i) => {
     const li = document.createElement("li");
     li.className = "sp";
@@ -94,6 +94,7 @@ function renderSpecies() {
       <span class="sp-pct" title="Seen on ${pct}% of sampled checklists">${pct}%</span>
       <span class="sp-meter" aria-hidden="true"><i style="width:${Math.max(2, pct)}%"></i></span>`;
     li.querySelector(".sp-name").textContent = sp.comName;
+    if ((progress[sp.code]?.box ?? 0) >= LEARNED_BOX) li.querySelector(".sp-name").append(Object.assign(document.createElement("span"), { className: "learned-dot", title: "Learned" }));
     li.querySelector(".sp-sci").textContent = sp.sciName;
     li.querySelector(".sp-fam").textContent = sp.family ? `· ${sp.family}` : "";
     return li;
@@ -112,6 +113,13 @@ $("#search-form").addEventListener("submit", (e) => {
   if (q.length >= 2) searchPlaces(q);
 });
 $("#back").addEventListener("click", () => { show("search"); renderRecent(); });
+$("#study-start").addEventListener("click", () => {
+  show("study");
+  startSession({
+    deck: visible(), all: state.data.species, placeName: state.place.name,
+    onExit: () => { show("list"); renderSpecies(); },
+  });
+});
 document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => {
   state.top = Number(b.dataset.top);
   document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
