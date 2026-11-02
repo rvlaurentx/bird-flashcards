@@ -72,9 +72,12 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
 - **Hint progression:** photo → family → size relative to a familiar bird →
   key field mark → habitat/behavior → song/call → reveal. Fewer hints used =
   stronger recall credit.
-  - *Implemented today:* photo → family → genus → multiple choice
-    (look-alikes) → reveal. Size, field marks, habitat and song need a data
-    source we don't have yet; slot them into `hintsFor()` when added.
+  - *Implemented today:* photo → **another photo** of the same species →
+    family → multiple choice (look-alikes) → reveal. Size, field marks,
+    habitat and song need a data source we don't have yet; slot them into
+    `hintsFor()` when added.
+  - **No scientific names in hints** (user's request: they don't use them).
+    The genus hint was removed.
 - **Confusable-species grouping:** choices come from (a) curated confusion
   pairs (`CONFUSION_PAIRS`, eBird codes), (b) same eBird family on the trip
   list, then (c) taxonomically nearest species, all limited to the place's list.

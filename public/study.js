@@ -20,14 +20,17 @@ function mediaFor(sp) {
 // Warm the next card's data and image so it appears instantly.
 function prefetch(sp) {
   if (!sp) return;
-  mediaFor(sp).then((m) => { const ph = pickPhoto(sp, m); if (ph) new Image().src = ph.url; });
+  mediaFor(sp).then((m) => { [0, 1].forEach((o) => { const ph = pickPhoto(sp, m, o); if (ph) new Image().src = ph.url; }); });
 }
 
-function pickPhoto(sp, m) {
+// Rotate photos across reviews; offset 1 gives the "another photo" hint.
+function pickPhoto(sp, m, offset = 0) {
   if (!m?.photos?.length) return null;
   const seen = (getProgress()[sp.code]?.right || 0) + (getProgress()[sp.code]?.wrong || 0);
-  return m.photos[seen % m.photos.length]; // rotate photos across reviews
+  return m.photos[(seen + offset) % m.photos.length];
 }
+
+const cardHints = (c) => hintsFor(c.sp, c.media?.photos?.length || 0);
 
 let s = null; // session state
 
@@ -59,7 +62,9 @@ async function showCard() {
 
   const m = await mediaFor(card);
   if (s.card?.sp !== card) return; // moved on meanwhile
+  s.card.media = m;
   renderPhoto(pickPhoto(card, m), false);
+  renderActions(); // hints depend on how many photos there are
 }
 
 function renderPhoto(photo, loading) {
@@ -81,12 +86,13 @@ function renderPhoto(photo, loading) {
 }
 
 function renderActions() {
-  const c = s.card, hints = hintsFor(c.sp);
+  const c = s.card, hints = cardHints(c);
   const actions = $("#actions");
   if (!c.answered) {
     const next = hints[c.hintsUsed];
+    const loading = !c.media; // wait for photos so the hint list is final
     actions.replaceChildren(
-      el("button", { type: "button", class: "btn ghost", disabled: !next, onclick: showHint }, next ? `Hint: ${next.label.toLowerCase()}` : "No more hints"),
+      el("button", { type: "button", class: "btn ghost", disabled: loading || !next, onclick: showHint }, loading ? "Hint" : next ? `Hint: ${next.label.toLowerCase()}` : "No more hints"),
       el("button", { type: "button", class: "btn primary", onclick: reveal }, "Show answer"),
     );
   } else if (c.result === undefined) {
@@ -101,12 +107,25 @@ function renderActions() {
 }
 
 function showHint() {
-  const c = s.card, hint = hintsFor(c.sp)[c.hintsUsed];
+  const c = s.card, hint = cardHints(c)[c.hintsUsed];
   if (!hint) return;
   c.hintsUsed++;
   if (hint.kind === "choices") showChoices();
+  else if (hint.kind === "photo") showExtraPhoto(c);
   else $("#hints").append(el("div", { class: "hint" }, el("span", { class: "hint-label" }, hint.label), el("span", {}, hint.text)));
   renderActions();
+}
+
+function showExtraPhoto(c) {
+  const ph = pickPhoto(c.sp, c.media, 1);
+  if (!ph) return;
+  const credit = el("figcaption", { class: "credit" },
+    ph.page ? el("a", { href: ph.page, target: "_blank", rel: "noopener" }, ph.attribution) : ph.attribution, " · iNaturalist");
+  const img = el("img", { src: ph.url, alt: "Another photo of the same bird", decoding: "async" });
+  const fig = el("figure", { class: "photo hint-photo" }, el("div", { class: "photo-frame" }, img), credit);
+  img.onerror = () => fig.replaceChildren(el("p", { class: "photo-note" }, "This photo isn't available offline."));
+  $("#hints").append(fig);
+  fig.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function showChoices() {

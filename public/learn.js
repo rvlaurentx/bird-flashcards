@@ -29,12 +29,12 @@ export function requeue(queue, card, gap = 3) {
 // ---------- hints ----------
 // Agreed progression (CLAUDE.md): photo → family → size → field mark →
 // habitat → song → reveal. Size, field mark, habitat and song need data we
-// don't have yet, so today's steps are family → genus → look-alike choices.
-export function hintsFor(sp) {
+// don't have yet, so today's steps are another photo → family → look-alike
+// choices. No scientific names: the user doesn't use them.
+export function hintsFor(sp, photoCount = 0) {
   const hints = [];
+  if (photoCount > 1) hints.push({ kind: "photo", label: "Another photo", text: "" });
   if (sp.family) hints.push({ kind: "family", label: "Family", text: sp.family });
-  const genus = (sp.sciName || "").split(" ")[0];
-  if (genus) hints.push({ kind: "genus", label: "Genus", text: `${genus} …` });
   hints.push({ kind: "choices", label: "Choices", text: "" });
   return hints;
 }

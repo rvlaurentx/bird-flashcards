@@ -27,10 +27,11 @@ test("missed cards return a few cards later", () => {
   assert.deepEqual(requeue(["b"], "a").join(""), "ba");
 });
 
-test("hints end with choices", () => {
-  const h = hintsFor(sp("dowwoo", 0.5, "picida1", 1));
-  assert.deepEqual(h.map((x) => x.kind), ["family", "genus", "choices"]);
-  assert.equal(h[1].text, "Genus …");
+test("hints: another photo first (when there is one), then family, then choices; no scientific names", () => {
+  const bird = sp("dowwoo", 0.5, "picida1", 1);
+  assert.deepEqual(hintsFor(bird, 3).map((x) => x.kind), ["photo", "family", "choices"]);
+  assert.deepEqual(hintsFor(bird, 1).map((x) => x.kind), ["family", "choices"]);
+  assert.ok(!hintsFor(bird, 3).some((h) => h.kind === "genus" || h.text.includes("Genus")));
 });
 
 test("look-alikes: curated pair first, then same family, then taxonomic neighbours", () => {

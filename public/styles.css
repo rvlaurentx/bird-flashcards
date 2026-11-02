@@ -123,6 +123,7 @@ main { padding-block: 24px 8px; }
 
 .hints { display: flex; flex-direction: column; gap: 6px; }
 .hints:empty { display: none; }
+.hint-photo { margin: 0; }
 .hint { display: flex; gap: 10px; align-items: baseline; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .hint-label { font: 500 .7rem/1 var(--font-data); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); min-width: 4.5rem; }
 
