@@ -11,12 +11,22 @@ export class ApiError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
+// Strip whitespace, line breaks and wrapping quotes that sneak in when pasting.
+export function getKey() {
+  return (process.env.EBIRD_API_KEY || "").trim().replace(/^["']+|["']+$/g, "").trim();
+}
+
 export async function ebird(path) {
   if (isMock()) return mockEbird(path);
-  const key = process.env.EBIRD_API_KEY;
-  if (!key) throw new ApiError(500, "EBIRD_API_KEY is not set. Add it in Vercel → Settings → Environment Variables (or in .env for local dev).");
-  const res = await fetch(EBIRD + path, { headers: { "X-eBirdApiToken": key } });
-  if (res.status === 401 || res.status === 403) throw new ApiError(502, "eBird rejected the API key. Check EBIRD_API_KEY.");
+  const key = getKey();
+  if (!key) throw new ApiError(500, "EBIRD_API_KEY is not set for this deployment. Add it in Vercel → Settings → Environment Variables (Production and Preview), then redeploy.");
+  let res;
+  try {
+    res = await fetch(EBIRD + path, { headers: { "X-eBirdApiToken": key } });
+  } catch (e) {
+    throw new ApiError(502, `Could not reach eBird (${e.cause?.code || e.message}).`);
+  }
+  if (res.status === 401 || res.status === 403) throw new ApiError(502, `eBird refused the request (HTTP ${res.status}). The key is probably wrong; open /api/health for details.`);
   if (res.status === 429) throw new ApiError(503, "eBird rate limit reached. Try again in a minute.");
   if (!res.ok) throw new ApiError(502, `eBird returned ${res.status} for ${path.split("?")[0]}`);
   return res.json();
@@ -61,6 +71,6 @@ export function send(res, status, body, cacheSeconds = 0) {
 
 export function fail(res, e) {
   const status = e instanceof ApiError ? e.status : 500;
-  if (status === 500 && !(e instanceof ApiError)) console.error(e);
-  send(res, status, { error: e instanceof ApiError ? e.message : "Unexpected server error." });
+  if (!(e instanceof ApiError)) console.error(e);
+  send(res, status, { error: e instanceof ApiError ? e.message : `Unexpected server error: ${e.message}` });
 }

@@ -23,3 +23,13 @@ npm test
    Preview). Get a key at https://ebird.org/api/keygen. Redeploy afterwards.
 
 Bird data: eBird, Cornell Lab of Ornithology. Place search: Open-Meteo.
+
+## Troubleshooting the eBird key
+Open `https://<your-app>.vercel.app/api/health`. It never shows the key, only:
+- `key.present: false` → the variable isn't reaching this deployment. Check the
+  name is exactly `EBIRD_API_KEY`, that it's enabled for the environment you're
+  testing (Production vs Preview), then **redeploy** (Deployments → ⋯ → Redeploy).
+  Changing a variable doesn't affect deployments that already exist.
+- `ebird.status: 401/403` → eBird rejected the key. Copy it again from
+  https://ebird.org/api/keygen.
+- `key.hadStrayCharacters: true` is harmless; the app strips spaces/quotes.
