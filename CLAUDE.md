@@ -77,10 +77,11 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
   key field mark → habitat/behavior → song/call → reveal. Fewer hints used =
   stronger recall credit.
   - *Implemented today:* photo → **another photo** of the same species →
-    family → **song or call** (autoplays, xeno-canto) → multiple choice
-    (look-alikes) → reveal. Each hint only appears when its data exists.
-    Size, field marks and habitat need a data source we don't have yet;
-    slot them into `hintsFor()` (between family and sound) when added.
+    **song or call** (autoplays, xeno-canto) → family → multiple choice
+    (look-alikes) → reveal. The user moved song before family. Each hint
+    only appears when its data exists. Size, field marks and habitat need a
+    data source we don't have yet; slot them into `hintsFor()` after family
+    when added (confirm placement with the user).
   - Answer side lists all picked recordings (song/call) with credits.
   - **No scientific names in hints** (user's request: they don't use them).
     The genus hint was removed. The scientific name stays on the answer side
