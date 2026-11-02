@@ -75,6 +75,7 @@ async function showCard() {
   const [card, ...rest] = s.queue;
   s.queue = rest;
   stopAudio();
+  setRevealed(false);
   s.card = { sp: card, hintsUsed: 0, answered: false };
   prefetch(rest[0]);
 
@@ -125,7 +126,7 @@ function renderActions() {
     const loading = !c.media; // wait for photos so the hint list is final
     actions.replaceChildren(
       el("button", { type: "button", class: "btn ghost", disabled: loading || !next, onclick: showHint }, loading ? "Hint" : next ? `Hint: ${next.label.toLowerCase()}` : "No more hints"),
-      el("button", { type: "button", class: "btn primary", onclick: reveal }, "Show answer"),
+      el("button", { type: "button", class: "btn primary", onclick: () => reveal() }, "Show answer"),
     );
   } else if (c.result === undefined) {
     actions.replaceChildren(
@@ -184,13 +185,23 @@ function showChoices() {
         if (b.dataset.code === c.sp.code) b.classList.add("right");
         else if (b.dataset.code === o.code) b.classList.add("wrong");
       });
-      reveal();
+      reveal(o);
       record(right);
     },
   }, o.comName)));
 }
 
-async function reveal() {
+// Revealed layout: photo shrinks to a banner, hints and choices fold away,
+// and the answer sits right under the photo so it's visible without scrolling.
+function setRevealed(on) {
+  $("#view-study").classList.toggle("revealed", on);
+  if (on) {
+    document.querySelectorAll("#hints audio").forEach((a) => a.pause());
+    window.scrollTo({ top: 0 });
+  }
+}
+
+async function reveal(chosen) {
   const c = s.card;
   if (c.answered) return;
   c.answered = true;
@@ -198,7 +209,11 @@ async function reveal() {
   const pct = Math.round(sp.freq * 100);
   const ans = $("#answer");
   ans.hidden = false;
+  setRevealed(true);
   ans.replaceChildren(
+    chosen ? (chosen.code === sp.code
+      ? el("p", { class: "ans-result right" }, "✓ Correct")
+      : el("p", { class: "ans-result wrong" }, `✗ You chose ${chosen.comName}`)) : null,
     el("h2", { class: "ans-name" }, sp.comName),
     el("p", { class: "ans-sci" }, el("i", {}, sp.sciName), sp.family ? ` · ${sp.family}` : ""),
     el("p", { class: "ans-freq" }, `Seen on ${pct}% of recent checklists around ${s.placeName}.`),
@@ -232,6 +247,7 @@ function record(knewIt) {
 
 function finish() {
   stopAudio();
+  setRevealed(false);
   const total = s.deck.length;
   const clean = [...s.firstTry.values()].filter(Boolean).length;
   const missed = s.deck.filter((sp) => s.firstTry.get(sp.code) === false || s.firstTry.get(sp.code) === undefined);

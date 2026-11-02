@@ -147,6 +147,14 @@ main { padding-block: 24px 8px; }
 .ans-sci { color: var(--muted); }
 .ans-freq { font: 500 .8rem/1.4 var(--font-data); color: var(--muted); }
 .ans-summary:empty { display: none; }
+.ans-result { font: 700 .95rem/1.2 var(--font-display); }
+.ans-result.right { color: var(--right); }
+.ans-result.wrong { color: var(--wrong); }
+
+/* Answer revealed: keep photo, answer and buttons on one screen. */
+.revealed .photo-frame { aspect-ratio: auto; height: min(30vh, 260px); }
+.revealed #hints, .revealed #choices { display: none; }
+.revealed .answer { gap: 4px; }
 .ans-links { display: grid; gap: 4px; }
 .ebird-link {
   display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px;

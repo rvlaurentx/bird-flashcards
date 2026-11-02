@@ -83,6 +83,11 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
     data source we don't have yet; slot them into `hintsFor()` after family
     when added (confirm placement with the user).
   - Answer side lists all picked recordings (song/call) with credits.
+  - **Answer must be visible without scrolling** (user's request): on reveal
+    the view gets `.revealed` — photo shrinks to a banner (≤30vh), hints and
+    choices hide, the answer card follows the photo, page scrolls to top.
+    Checked at 390×844 and 360×640. Choice outcome shows as "✓ Correct" /
+    "✗ You chose …" at the top of the answer.
   - **No scientific names in hints** (user's request: they don't use them).
     The genus hint was removed. The scientific name stays on the answer side
     (user confirmed).
