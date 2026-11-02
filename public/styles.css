@@ -147,6 +147,13 @@ main { padding-block: 24px 8px; }
 .ans-sci { color: var(--muted); }
 .ans-freq { font: 500 .8rem/1.4 var(--font-data); color: var(--muted); }
 .ans-summary:empty { display: none; }
+.ans-links { display: grid; gap: 4px; }
+.ebird-link {
+  display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px;
+  border: 1.5px solid var(--line); border-radius: 10px; text-decoration: none;
+  font: 700 .95rem/1.2 var(--font-display); color: var(--accent);
+}
+.ebird-link:hover { border-color: var(--accent); }
 
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; position: sticky; bottom: 0; padding-block: 10px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--bg); }
 .actions .wide, .actions .ask { grid-column: 1 / -1; }

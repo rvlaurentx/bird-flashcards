@@ -204,11 +204,14 @@ async function reveal() {
     el("p", { class: "ans-freq" }, `Seen on ${pct}% of recent checklists around ${s.placeName}.`),
     el("p", { class: "ans-summary" }),
     el("p", { class: "ans-links" },
-      el("a", { href: `https://ebird.org/species/${sp.code}`, target: "_blank", rel: "noopener" }, "eBird species page"),
+      // Macaulay Library media can't be shown in-app without a license
+      // (CLAUDE.md), so link out to eBird, which displays it.
+      el("a", { class: "ebird-link", href: `https://ebird.org/species/${sp.code}`, target: "_blank", rel: "noopener" }, "More photos and sounds on eBird ↗"),
+      el("span", { class: "credit" }, "From the Macaulay Library, Cornell Lab of Ornithology"),
     ),
   );
   const recs = c.sounds?.recordings || [];
-  if (recs.length) ans.insertBefore(el("div", { class: "sounds" }, ...recs.map((r) => player(r))), ans.querySelector(".ans-links"));
+  if (recs.length) ans.append(el("div", { class: "sounds" }, ...recs.map((r) => player(r))));
   renderActions();
   const m = await mediaFor(sp);
   if (s.card !== c || !m?.summary) return;

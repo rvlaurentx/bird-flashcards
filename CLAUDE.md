@@ -29,7 +29,7 @@ the starter template.
 | Likely species for a place | eBird API 2.0 | In use: `api/species.js` |
 | Bird sounds | Xeno-canto API v3 | In use: `api/sounds.js`, `api/_lib/xc.js`. Key in `XENO_CANTO_API_KEY` (server only; sent as `key=` query param). Query `gen:X sp:y q:A`, then any quality, then `en:"Common Name"`. Picks ≤2 songs + ≤2 calls, ≤90 s, best quality first. Every recording shows XC number, recordist and its CC license (some are NC/ND; playing unmodified is fine while non-commercial). |
 | Photos + short description | iNaturalist API (taxon photos; `wikipedia_summary`) | In use: `api/media.js`, `api/_lib/inat.js`. Only CC0/CC-BY/CC-BY-SA/CC-BY-NC/CC-BY-NC-SA photos (`ALLOWED_LICENSES`); NC is allowed only while the app is non-commercial. The attribution string is shown under every photo. Taxon matched by scientific name, then common name (eBird and iNat names sometimes differ). |
-| Photos/audio (alt) | Macaulay Library | No open public API; media is generally not licensed for reuse in apps without permission. Check current terms before using. |
+| Photos/audio (alt) | Macaulay Library | **Not used in-app.** No public API; Cornell treats all apps as commercial use needing a license (per-item requests via the Help Desk). Don't scrape. The answer side links out to the eBird species page ("More photos and sounds on eBird"), which shows ML media under Cornell's terms. Revisit if a license is obtained (e.g. via High Country Audubon). |
 
 Re-check current key requirements and license terms for each source before any
 public release.
