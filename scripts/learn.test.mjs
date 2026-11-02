@@ -16,10 +16,18 @@ test("grading: promote only when known without hints; reset on miss", () => {
   assert.equal(p.a.box, 5);
 });
 
-test("session order: weakest first, then commonest", () => {
-  const deck = [sp("x", 0.9), sp("y", 0.5), sp("z", 0.2)];
-  const order = sessionOrder(deck, { x: { box: 3 }, y: { box: 0 }, z: { box: 0 } }).map((s) => s.code);
-  assert.deepEqual(order, ["y", "z", "x"]);
+test("session order: random, but weaker birds before known ones", () => {
+  const deck = "abcdefghij".split("").map((c, i) => sp(c, 1 - i / 10));
+  const orders = new Set();
+  for (let i = 0; i < 20; i++) orders.add(sessionOrder(deck, {}).map((s) => s.code).join(""));
+  assert.ok(orders.size > 10, "fresh deck is shuffled");
+  assert.ok(!orders.has("abcdefghij") || orders.size > 1);
+  for (let i = 0; i < 20; i++) {
+    const order = sessionOrder(deck, { a: { box: 4 }, b: { box: 2 } }).map((s) => s.code);
+    assert.equal(order.at(-1), "a");
+    assert.equal(order.at(-2), "b");
+    assert.equal(new Set(order).size, 10);
+  }
 });
 
 test("missed cards return a few cards later", () => {

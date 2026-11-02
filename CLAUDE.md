@@ -91,8 +91,9 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
 - **Spaced repetition (Leitner boxes 0–5, per species, shared across trips):**
   known with no hints → box +1; known with hints → no promotion (min 1);
   missed → box 0 and the card returns 3 cards later in the same session.
-  Box ≥ 3 = "learned" (dot in the species list). Sessions order cards weakest
-  first, then commonest on the trip. Progress is in localStorage (`bf-progress`);
+  Box ≥ 3 = "learned" (dot in the species list). Sessions shuffle the cards
+  (user's request), then stable-sort by box, so weaker birds still come first
+  but in random order. Progress is in localStorage (`bf-progress`);
   move to IndexedDB with the trip-deck work.
 - Photos rotate between reviews so you learn the bird, not one picture.
 

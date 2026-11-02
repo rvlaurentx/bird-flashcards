@@ -14,9 +14,16 @@ export function grade(progress, code, { knewIt, hintsUsed }) {
   return { ...progress, [code]: p };
 }
 
-// Study order: weakest first, then commonest on the trip.
-export function sessionOrder(deck, progress) {
-  return [...deck].sort((a, b) => (progress[a.code]?.box ?? 0) - (progress[b.code]?.box ?? 0) || b.freq - a.freq);
+// Study order: random (user's request), but weaker birds still come before
+// ones you know. A fresh deck (all box 0) is fully shuffled.
+export function sessionOrder(deck, progress, rand = Math.random) {
+  const shuffled = [...deck];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const box = (s) => progress[s.code]?.box ?? 0;
+  return shuffled.sort((a, b) => box(a) - box(b)); // stable: keeps random order within a box
 }
 
 // Missed cards come back a few cards later in the same session.
