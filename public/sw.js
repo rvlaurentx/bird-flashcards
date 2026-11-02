@@ -1,11 +1,13 @@
 // Service worker. Offline-first by design:
-// - App shell is precached so the app opens with no signal.
+// - App shell is precached so the app opens with no signal. With signal, the
+//   app's own files come from the network first, so a new deploy shows up on
+//   the next open (the page reloads itself once when a new worker takes over).
 // - Species lists (/api/species) are network-first, falling back to the last
 //   saved copy, so any place you've opened before still works in the field.
 // - Later: a "trip deck" cache will hold that trip's photos and audio
 //   (see CLAUDE.md → Offline trip decks).
 
-const VERSION = "v2";
+const VERSION = "v3";
 const SHELL = `shell-${VERSION}`;
 const DATA = "data-v1";      // API responses; kept across app updates
 const FONTS = "fonts-v1";
@@ -35,8 +37,7 @@ self.addEventListener("fetch", (e) => {
   } else if (/(^|\.)inaturalist\.org$|inaturalist-open-data\.s3\.amazonaws\.com$/.test(url.hostname)) {
     e.respondWith(cacheFirst(req, MEDIA));
   } else if (url.origin === location.origin) {
-    if (req.mode === "navigate") e.respondWith(caches.match("/index.html").then((r) => r || fetch(req)));
-    else e.respondWith(caches.match(req).then((r) => r || fetch(req)));
+    e.respondWith(shellNetworkFirst(req));
   }
 });
 
@@ -49,6 +50,19 @@ async function networkFirst(req, cacheName) {
   } catch {
     const hit = await cache.match(req);
     return hit || new Response(JSON.stringify({ error: "You're offline and this isn't saved on this device yet." }), { status: 503, headers: { "Content-Type": "application/json" } });
+  }
+}
+
+// App files: fresh from the network when possible; saved copy when offline.
+async function shellNetworkFirst(req) {
+  const cache = await caches.open(SHELL);
+  const key = req.mode === "navigate" ? "/index.html" : req;
+  try {
+    const res = await fetch(req, { cache: "no-cache" });
+    if (res.ok) cache.put(key, res.clone());
+    return res;
+  } catch {
+    return (await cache.match(key)) || (await caches.match(req)) || Response.error();
   }
 }
 

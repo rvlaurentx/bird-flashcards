@@ -133,5 +133,11 @@ updateNet();
 renderRecent();
 
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => { /* non-fatal */ }));
+  // When a new version's worker takes over, reload once so its files are used.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController && !reloaded) { reloaded = true; location.reload(); }
+  });
+  addEventListener("load", () => navigator.serviceWorker.register("/sw.js").then((r) => r.update()).catch(() => { /* non-fatal */ }));
 }
