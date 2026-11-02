@@ -5,6 +5,7 @@ import { grade, sessionOrder, requeue, hintsFor, lookalikes } from "./learn.js";
 
 const PROGRESS_KEY = "bf-progress";
 const media = new Map(); // code -> Promise<media>
+const sounds = new Map(); // code -> Promise<sounds>
 
 export const getProgress = () => load(PROGRESS_KEY, {});
 
@@ -17,9 +18,19 @@ function mediaFor(sp) {
   return media.get(sp.code);
 }
 
+function soundsFor(sp) {
+  if (!sounds.has(sp.code)) {
+    const p = api(`/api/sounds?sci=${encodeURIComponent(sp.sciName)}&name=${encodeURIComponent(sp.comName)}`)
+      .catch(() => ({ recordings: [] }));
+    sounds.set(sp.code, p);
+  }
+  return sounds.get(sp.code);
+}
+
 // Warm the next card's data and image so it appears instantly.
 function prefetch(sp) {
   if (!sp) return;
+  soundsFor(sp);
   mediaFor(sp).then((m) => { [0, 1].forEach((o) => { const ph = pickPhoto(sp, m, o); if (ph) new Image().src = ph.url; }); });
 }
 
@@ -30,13 +41,32 @@ function pickPhoto(sp, m, offset = 0) {
   return m.photos[(seen + offset) % m.photos.length];
 }
 
-const cardHints = (c) => hintsFor(c.sp, c.media?.photos?.length || 0);
+const cardHints = (c) => hintsFor(c.sp, c.media?.photos?.length || 0, c.sounds?.recordings?.length || 0);
+
+const stopAudio = () => document.querySelectorAll("#view-study audio").forEach((a) => a.pause());
+
+// One recording: label, native player, and the credit xeno-canto requires.
+function player(rec, { autoplay = false } = {}) {
+  const audio = el("audio", { controls: true, preload: autoplay ? "auto" : "none", src: rec.url });
+  audio.addEventListener("play", () => document.querySelectorAll("#view-study audio").forEach((a) => a !== audio && a.pause()));
+  audio.addEventListener("error", () => audio.replaceWith(el("p", { class: "photo-note" }, navigator.onLine ? "This recording couldn't be played." : "Recordings aren't saved for offline use yet.")));
+  if (autoplay) audio.play().catch(() => { /* user can press play */ });
+  const kind = rec.kind === "song" ? "Song" : rec.kind === "call" ? "Call" : "Sound";
+  return el("div", { class: "sound" },
+    el("span", { class: "hint-label" }, kind),
+    audio,
+    el("p", { class: "credit" },
+      el("a", { href: rec.page, target: "_blank", rel: "noopener" }, rec.id), ` · ${rec.recordist} · `,
+      rec.licenseUrl ? el("a", { href: rec.licenseUrl, target: "_blank", rel: "noopener" }, rec.license) : rec.license,
+      " · xeno-canto"),
+  );
+}
 
 let s = null; // session state
 
 export function startSession({ deck, all, placeName, onExit }) {
   s = { deck, all, placeName, onExit, queue: sessionOrder(deck, getProgress()), done: 0, firstTry: new Map(), card: null };
-  $("#study-exit").onclick = () => onExit();
+  $("#study-exit").onclick = () => { stopAudio(); onExit(); };
   showCard();
 }
 
@@ -44,6 +74,7 @@ async function showCard() {
   if (!s.queue.length) return finish();
   const [card, ...rest] = s.queue;
   s.queue = rest;
+  stopAudio();
   s.card = { sp: card, hintsUsed: 0, answered: false };
   prefetch(rest[0]);
 
@@ -60,11 +91,12 @@ async function showCard() {
   renderPhoto(null, true);
   renderActions();
 
-  const m = await mediaFor(card);
+  const [m, snd] = await Promise.all([mediaFor(card), soundsFor(card)]);
   if (s.card?.sp !== card) return; // moved on meanwhile
   s.card.media = m;
+  s.card.sounds = snd;
   renderPhoto(pickPhoto(card, m), false);
-  renderActions(); // hints depend on how many photos there are
+  renderActions(); // available hints depend on photos and sounds
 }
 
 function renderPhoto(photo, loading) {
@@ -112,6 +144,7 @@ function showHint() {
   c.hintsUsed++;
   if (hint.kind === "choices") showChoices();
   else if (hint.kind === "photo") showExtraPhoto(c);
+  else if (hint.kind === "sound") showSoundHint(c);
   else $("#hints").append(el("div", { class: "hint" }, el("span", { class: "hint-label" }, hint.label), el("span", {}, hint.text)));
   renderActions();
 }
@@ -126,6 +159,15 @@ function showExtraPhoto(c) {
   img.onerror = () => fig.replaceChildren(el("p", { class: "photo-note" }, "This photo isn't available offline."));
   $("#hints").append(fig);
   fig.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function showSoundHint(c) {
+  const recs = c.sounds?.recordings || [];
+  const rec = recs.find((r) => r.kind === "song") || recs[0];
+  if (!rec) return;
+  const node = player(rec, { autoplay: true });
+  $("#hints").append(node);
+  node.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function showChoices() {
@@ -165,6 +207,8 @@ async function reveal() {
       el("a", { href: `https://ebird.org/species/${sp.code}`, target: "_blank", rel: "noopener" }, "eBird species page"),
     ),
   );
+  const recs = c.sounds?.recordings || [];
+  if (recs.length) ans.insertBefore(el("div", { class: "sounds" }, ...recs.map((r) => player(r))), ans.querySelector(".ans-links"));
   renderActions();
   const m = await mediaFor(sp);
   if (s.card !== c || !m?.summary) return;
@@ -184,6 +228,7 @@ function record(knewIt) {
 }
 
 function finish() {
+  stopAudio();
   const total = s.deck.length;
   const clean = [...s.firstTry.values()].filter(Boolean).length;
   const missed = s.deck.filter((sp) => s.firstTry.get(sp.code) === false || s.firstTry.get(sp.code) === undefined);

@@ -32,6 +32,7 @@ test("hints: another photo first (when there is one), then family, then choices;
   assert.deepEqual(hintsFor(bird, 3).map((x) => x.kind), ["photo", "family", "choices"]);
   assert.deepEqual(hintsFor(bird, 1).map((x) => x.kind), ["family", "choices"]);
   assert.ok(!hintsFor(bird, 3).some((h) => h.kind === "genus" || h.text.includes("Genus")));
+  assert.deepEqual(hintsFor(bird, 3, 2).map((x) => x.kind), ["photo", "family", "sound", "choices"]);
 });
 
 test("look-alikes: curated pair first, then same family, then taxonomic neighbours", () => {

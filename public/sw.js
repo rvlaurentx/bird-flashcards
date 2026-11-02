@@ -7,7 +7,7 @@
 // - Later: a "trip deck" cache will hold that trip's photos and audio
 //   (see CLAUDE.md → Offline trip decks).
 
-const VERSION = "v4";
+const VERSION = "v5";
 const SHELL = `shell-${VERSION}`;
 const DATA = "data-v1";      // API responses; kept across app updates
 const FONTS = "fonts-v1";

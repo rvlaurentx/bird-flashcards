@@ -19,8 +19,9 @@ npm test
 1. Push this folder to the GitHub repo `bird-flashcards`.
 2. In Vercel: **Add New → Project**, import the repo. Framework preset: **Other**.
    No build command is needed (`vercel.json` serves `public/`).
-3. **Settings → Environment Variables**: add `EBIRD_API_KEY` (Production and
-   Preview). Get a key at https://ebird.org/api/keygen. Redeploy afterwards.
+3. **Settings → Environment Variables** (Production and Preview), then redeploy:
+   - `EBIRD_API_KEY`: get one at https://ebird.org/api/keygen
+   - `XENO_CANTO_API_KEY`: from your xeno-canto account page (bird sounds)
 
 Bird data: eBird, Cornell Lab of Ornithology. Place search: Open-Meteo.
 
@@ -33,3 +34,4 @@ Open `https://<your-app>.vercel.app/api/health`. It never shows the key, only:
 - `ebird.status: 401/403` → eBird rejected the key. Copy it again from
   https://ebird.org/api/keygen.
 - `key.hadStrayCharacters: true` is harmless; the app strips spaces/quotes.
+- The `xenoCanto` section does the same checks for `XENO_CANTO_API_KEY`.

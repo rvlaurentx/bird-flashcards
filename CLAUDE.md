@@ -15,8 +15,8 @@ the starter template.
   (built-in sample data). Tests: `npm test` (mock data).
 
 ## Hard rules
-- **API keys never reach GitHub or the browser.** `EBIRD_API_KEY` is a Vercel
-  environment variable. The browser only calls our `/api/*` functions.
+- **API keys never reach GitHub or the browser.** `EBIRD_API_KEY` and
+  `XENO_CANTO_API_KEY` are Vercel environment variables. The browser only calls our `/api/*` functions.
   `.env` is git-ignored; `.env.example` documents the variables.
 - **Offline trip decks are a core requirement, not an add-on.** Birders often
   have no signal. Every feature must answer: "what happens with no network?"
@@ -27,7 +27,7 @@ the starter template.
 |---|---|---|
 | Place name → coordinates | Open-Meteo geocoding API (free, no key) | In use: `api/places.js` |
 | Likely species for a place | eBird API 2.0 | In use: `api/species.js` |
-| Bird sounds | Xeno-canto API v3 | Planned. v3 needs an API key → serverless function + env var. Recordings have per-recording Creative Commons licenses (some NC/ND); store and show license + recordist. |
+| Bird sounds | Xeno-canto API v3 | In use: `api/sounds.js`, `api/_lib/xc.js`. Key in `XENO_CANTO_API_KEY` (server only; sent as `key=` query param). Query `gen:X sp:y q:A`, then any quality, then `en:"Common Name"`. Picks ≤2 songs + ≤2 calls, ≤90 s, best quality first. Every recording shows XC number, recordist and its CC license (some are NC/ND; playing unmodified is fine while non-commercial). |
 | Photos + short description | iNaturalist API (taxon photos; `wikipedia_summary`) | In use: `api/media.js`, `api/_lib/inat.js`. Only CC0/CC-BY/CC-BY-SA/CC-BY-NC/CC-BY-NC-SA photos (`ALLOWED_LICENSES`); NC is allowed only while the app is non-commercial. The attribution string is shown under every photo. Taxon matched by scientific name, then common name (eBird and iNat names sometimes differ). |
 | Photos/audio (alt) | Macaulay Library | No open public API; media is generally not licensed for reuse in apps without permission. Check current terms before using. |
 
@@ -53,7 +53,7 @@ public release.
   in memory per county for 12 h while the function instance is warm.
   If limits are still a problem, persist results in Vercel KV/Blob keyed by
   region (survives cold starts and is shared by all instances).
-- `/api/health` diagnoses the key setup without revealing the key.
+- `/api/health` diagnoses both keys (eBird, xeno-canto) without revealing them.
 - **Known limitation:** "recent" means the current season. For a trip months
   away we'll want month-specific frequency (eBird bar-chart data per month).
 
@@ -62,6 +62,10 @@ public release.
   fallback (any place opened before works offline); Google Fonts cached;
   iNaturalist photos cache-first (`media-v1`, ~400 max), so birds you've
   already studied keep their photos offline.
+- **Audio is not cached yet.** `<audio>` uses range requests (HTTP 206),
+  which the Cache API can't store as-is. Trip decks must download each
+  recording in full (`fetch` → blob) and serve it from IndexedDB/Cache with
+  a full 200 response.
 - Next: an explicit **"Download trip deck"** action that stores the species
   list, chosen photos and audio for a trip in a dedicated cache (plus deck
   metadata/progress in IndexedDB), shows the download size first, and lets
@@ -73,9 +77,11 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
   key field mark → habitat/behavior → song/call → reveal. Fewer hints used =
   stronger recall credit.
   - *Implemented today:* photo → **another photo** of the same species →
-    family → multiple choice (look-alikes) → reveal. Size, field marks,
-    habitat and song need a data source we don't have yet; slot them into
-    `hintsFor()` when added.
+    family → **song or call** (autoplays, xeno-canto) → multiple choice
+    (look-alikes) → reveal. Each hint only appears when its data exists.
+    Size, field marks and habitat need a data source we don't have yet;
+    slot them into `hintsFor()` (between family and sound) when added.
+  - Answer side lists all picked recordings (song/call) with credits.
   - **No scientific names in hints** (user's request: they don't use them).
     The genus hint was removed. The scientific name stays on the answer side
     (user confirmed).
@@ -94,7 +100,7 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
 1. ✅ Place → ranked species list (eBird, serverless, cached)
 2. ✅ Flashcard flow (photo → hints → answer; spaced repetition)
 3. ✅ Photos (iNaturalist, licensed + attributed) — pulled forward; cards need them
-4. Audio (Xeno-canto) — also enables the "song/call" hint
+4. ✅ Audio (Xeno-canto) — song/call hint + recordings on the answer side
 5. Offline trip decks (download, manage, study with no signal)
 6. Hint data for size / field marks / habitat (source to be decided)
 7. Optional: month-of-trip frequencies; Play Store wrapper

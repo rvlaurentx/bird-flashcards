@@ -103,3 +103,24 @@ export function mockMedia(sci, name) {
     wikipediaUrl: null,
   };
 }
+
+// A short generated tone (WAV) per species, so audio UI can be tried offline.
+function toneWav(freq) {
+  const rate = 8000, n = rate * 0.6, data = Buffer.alloc(n * 2);
+  for (let i = 0; i < n; i++) data.writeInt16LE(Math.round(Math.sin((2 * Math.PI * freq * i) / rate) * 8000 * Math.min(1, (n - i) / 800)), i * 2);
+  const h = Buffer.alloc(44);
+  h.write("RIFF", 0); h.writeUInt32LE(36 + data.length, 4); h.write("WAVEfmt ", 8); h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(rate, 24); h.writeUInt32LE(rate * 2, 28);
+  h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write("data", 36); h.writeUInt32LE(data.length, 40);
+  return "data:audio/wav;base64," + Buffer.concat([h, data]).toString("base64");
+}
+
+export function mockSounds(sci, name) {
+  const f = 600 + ([...(sci || name)].reduce((a, c) => a + c.charCodeAt(0), 0) % 1200);
+  const rec = (kind, n, freq) => ({
+    id: `XC00000${n}`, kind, type: kind, url: toneWav(freq), recordist: `Sample recordist ${n}`,
+    license: "CC BY-NC-SA 4.0", licenseUrl: "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    page: "https://xeno-canto.org", length: "0:01", country: "United States", quality: "A",
+  });
+  return { recordings: [rec("song", 1, f), rec("call", 2, f * 1.5)] };
+}

@@ -2,6 +2,7 @@
 // Reports whether EBIRD_API_KEY is present, its length, whether it contained
 // stray characters, and what eBird answers to one small authenticated request.
 import { getKey, send } from "./_lib/ebird.js";
+import { getXcKey } from "./_lib/xc.js";
 
 export default async function handler(req, res) {
   const raw = process.env.EBIRD_API_KEY;
@@ -25,6 +26,20 @@ export default async function handler(req, res) {
       out.ebird = { status: null, ok: false, error: e.cause?.code || e.message };
     }
   }
+  // xeno-canto (bird sounds)
+  const rawXc = process.env.XENO_CANTO_API_KEY;
+  const xcKey = getXcKey();
+  out.xenoCanto = { keyPresent: !!xcKey, keyLength: xcKey.length, hadStrayCharacters: rawXc !== undefined && rawXc !== xcKey, status: null };
+  if (xcKey) {
+    try {
+      const r = await fetch(`https://xeno-canto.org/api/3/recordings?query=${encodeURIComponent("gen:Cardinalis sp:cardinalis q:A")}&key=${encodeURIComponent(xcKey)}`);
+      out.xenoCanto.status = r.status;
+      out.xenoCanto.ok = r.ok;
+      if (!r.ok) { try { out.xenoCanto.message = (await r.json()).message || null; } catch { /* ignore */ } }
+    } catch (e) { out.xenoCanto.ok = false; out.xenoCanto.error = e.cause?.code || e.message; }
+  }
+  out.xenoCanto.verdict = !xcKey ? "No XENO_CANTO_API_KEY in this deployment (sounds disabled)." : out.xenoCanto.ok ? "xeno-canto key works." : "xeno-canto did not accept the request; see status/message.";
+
   out.verdict =
     !out.key.present ? "No EBIRD_API_KEY in this deployment. Check the variable name and that it's enabled for this environment, then redeploy." :
     !out.ebird?.ok && (out.ebird?.status === 401 || out.ebird?.status === 403) ? "eBird rejected this key. Copy it again from https://ebird.org/api/keygen and replace the value." :
