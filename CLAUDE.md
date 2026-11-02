@@ -37,17 +37,23 @@ public release.
 ### How the species ranking works (`api/species.js`)
 1. Nearby eBird hotspots (`/ref/hotspot/geo`) → pick the most common county
    (`subnational2Code`) among the 25 nearest.
-2. Recent checklists in that county (`/product/lists/{region}`), up to 40.
+2. Recent checklists in that county (`/product/lists/{region}`), up to 25.
 3. Fetch each checklist (`/product/checklist/view/{subId}`), keep complete ones
-   (`allObsReported`), falling back to all if fewer than 10 are complete.
+   (`allObsReported`), falling back to all if fewer than 8 are complete.
+   At most 3 requests in flight.
 4. Taxonomy lookup: keep `species`; roll `issf`/`form`/`intergrade` up to their
    species via `reportAs`; drop spuh/slash/hybrid/domestic.
 5. `freq` = share of sampled checklists reporting the species (the same idea as
    eBird's bar-chart "frequency"). Sorted by freq, then taxonomic order.
 - Responses are CDN-cached for 12 h (`s-maxage`); the client rounds lat/lng to
   2 decimals so nearby searches share a cache entry.
-- About 45 eBird calls per uncached search. If that becomes a problem, cache
-  results in Vercel KV/Blob keyed by region.
+- **eBird rate-limits bursts (HTTP 429).** The first version (40 checklists,
+  8 in parallel) hit it. Now: ~30 calls per uncached search, 3 in parallel,
+  429s retried with backoff (1s/2s/4s or `Retry-After`), and results cached
+  in memory per county for 12 h while the function instance is warm.
+  If limits are still a problem, persist results in Vercel KV/Blob keyed by
+  region (survives cold starts and is shared by all instances).
+- `/api/health` diagnoses the key setup without revealing the key.
 - **Known limitation:** "recent" means the current season. For a trip months
   away we'll want month-specific frequency (eBird bar-chart data per month).
 

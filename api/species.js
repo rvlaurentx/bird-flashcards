@@ -6,8 +6,13 @@
 
 import { ebird, pool, send, fail, ApiError } from "./_lib/ebird.js";
 
-const MAX_CHECKLISTS = 40;   // checklist details fetched per request
-const CONCURRENCY = 8;
+// eBird rate-limits bursts, so stay small and slow: ~25 checklist requests,
+// at most 3 in flight. Results are also cached per county (see below).
+const MAX_CHECKLISTS = 25;
+const CONCURRENCY = 3;
+const MIN_LISTS = 8;         // need at least this many checklists to rank
+const CACHE_MS = 12 * 60 * 60 * 1000;
+const cache = new Map();     // region -> { at, result }; lives while the function instance is warm
 const COUNTABLE = new Set(["species"]);
 const ROLLUP = new Set(["issf", "form", "intergrade"]); // count as their parent species
 
@@ -31,6 +36,8 @@ export async function rankSpecies(lat, lng, dist) {
   const hotspots = await ebird(`/ref/hotspot/geo?${ll}&dist=${dist}&fmt=json`);
   if (!hotspots.length) throw new ApiError(404, `No eBird hotspots within ${dist} km of this place.`);
   const region = pickRegion(hotspots, lat, lng);
+  const hit = cache.get(region);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.result;
 
   // 2. Recent checklists submitted in that region.
   const feed = await ebird(`/product/lists/${region}?maxResults=200`);
@@ -41,8 +48,13 @@ export async function rankSpecies(lat, lng, dist) {
   const details = (await pool(recent, CONCURRENCY, (c) => ebird(`/product/checklist/view/${c.subId || c.subID}`)))
     .filter((d) => d && !d.error && Array.isArray(d.obs));
   const complete = details.filter((d) => d.allObsReported);
-  const used = complete.length >= 10 ? complete : details; // fall back if few complete lists
-  if (!used.length) throw new ApiError(502, "Could not load checklist details from eBird.");
+  const used = complete.length >= MIN_LISTS ? complete : details; // fall back if few complete lists
+  if (used.length < Math.min(MIN_LISTS, recent.length)) {
+    const limited = details.length < recent.length && recent.length > 0;
+    throw new ApiError(limited ? 503 : 502, limited
+      ? "eBird is limiting requests right now. Wait a minute and try again."
+      : "Could not load checklist details from eBird.");
+  }
 
   // 4. Taxonomy: names, families, and roll subspecies groups up to species.
   const codes = [...new Set(used.flatMap((d) => d.obs.map((o) => o.speciesCode)))];
@@ -78,12 +90,14 @@ export async function rankSpecies(lat, lng, dist) {
   try { regionName = (await ebird(`/ref/region/info/${region}`)).result || region; } catch { /* keep code */ }
 
   const dates = used.map((d) => d.obsDt).filter(Boolean).sort();
-  return {
+  const result = {
     source: "eBird",
     region: { code: region, name: regionName },
     sample: { checklists: used.length, completeOnly: used === complete, from: dates[0] || null, to: dates.at(-1) || null },
     species,
   };
+  cache.set(region, { at: Date.now(), result });
+  return result;
 }
 
 function pickRegion(hotspots, lat, lng) {

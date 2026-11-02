@@ -7,6 +7,8 @@ import { mockEbird, mockGeocode } from "./mock.js";
 const EBIRD = "https://api.ebird.org/v2";
 const isMock = () => process.env.EBIRD_MOCK === "1";
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 export class ApiError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -21,13 +23,19 @@ export async function ebird(path) {
   const key = getKey();
   if (!key) throw new ApiError(500, "EBIRD_API_KEY is not set for this deployment. Add it in Vercel → Settings → Environment Variables (Production and Preview), then redeploy.");
   let res;
-  try {
-    res = await fetch(EBIRD + path, { headers: { "X-eBirdApiToken": key } });
-  } catch (e) {
-    throw new ApiError(502, `Could not reach eBird (${e.cause?.code || e.message}).`);
+  // On 429 (too many requests), wait and retry: 1s, 2s, 4s, or eBird's Retry-After.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await fetch(EBIRD + path, { headers: { "X-eBirdApiToken": key } });
+    } catch (e) {
+      throw new ApiError(502, `Could not reach eBird (${e.cause?.code || e.message}).`);
+    }
+    if (res.status !== 429 || attempt >= 3) break;
+    const retryAfter = Number(res.headers.get("retry-after"));
+    await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter, 8) * 1000 : 1000 * 2 ** attempt);
   }
   if (res.status === 401 || res.status === 403) throw new ApiError(502, `eBird refused the request (HTTP ${res.status}). The key is probably wrong; open /api/health for details.`);
-  if (res.status === 429) throw new ApiError(503, "eBird rate limit reached. Try again in a minute.");
+  if (res.status === 429) throw new ApiError(503, "eBird is limiting requests right now. Wait a minute and try again.");
   if (!res.ok) throw new ApiError(502, `eBird returned ${res.status} for ${path.split("?")[0]}`);
   return res.json();
 }
