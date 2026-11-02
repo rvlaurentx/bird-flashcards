@@ -77,7 +77,8 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
     habitat and song need a data source we don't have yet; slot them into
     `hintsFor()` when added.
   - **No scientific names in hints** (user's request: they don't use them).
-    The genus hint was removed.
+    The genus hint was removed. The scientific name stays on the answer side
+    (user confirmed).
 - **Confusable-species grouping:** choices come from (a) curated confusion
   pairs (`CONFUSION_PAIRS`, eBird codes), (b) same eBird family on the trip
   list, then (c) taxonomically nearest species, all limited to the place's list.
