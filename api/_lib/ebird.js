@@ -1,0 +1,66 @@
+// Server-side helpers for eBird API 2.0 and place geocoding.
+// Files under api/_lib are not exposed as Vercel functions.
+// The eBird key is read from process.env.EBIRD_API_KEY and never sent to the browser.
+
+import { mockEbird, mockGeocode } from "./mock.js";
+
+const EBIRD = "https://api.ebird.org/v2";
+const isMock = () => process.env.EBIRD_MOCK === "1";
+
+export class ApiError extends Error {
+  constructor(status, message) { super(message); this.status = status; }
+}
+
+export async function ebird(path) {
+  if (isMock()) return mockEbird(path);
+  const key = process.env.EBIRD_API_KEY;
+  if (!key) throw new ApiError(500, "EBIRD_API_KEY is not set. Add it in Vercel → Settings → Environment Variables (or in .env for local dev).");
+  const res = await fetch(EBIRD + path, { headers: { "X-eBirdApiToken": key } });
+  if (res.status === 401 || res.status === 403) throw new ApiError(502, "eBird rejected the API key. Check EBIRD_API_KEY.");
+  if (res.status === 429) throw new ApiError(503, "eBird rate limit reached. Try again in a minute.");
+  if (!res.ok) throw new ApiError(502, `eBird returned ${res.status} for ${path.split("?")[0]}`);
+  return res.json();
+}
+
+// Place-name search via Open-Meteo's free geocoder (no key needed).
+export async function geocode(q) {
+  if (isMock()) return mockGeocode(q);
+  const url = `https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&format=json&name=${encodeURIComponent(q)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new ApiError(502, `Place search failed (${res.status}).`);
+  const data = await res.json();
+  return (data.results || []).map((r) => ({
+    name: r.name,
+    detail: [r.admin2, r.admin1, r.country].filter(Boolean).join(", "),
+    lat: r.latitude,
+    lng: r.longitude,
+  }));
+}
+
+// Run async fn over items with limited concurrency.
+export async function pool(items, limit, fn) {
+  const out = new Array(items.length);
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) {
+      const n = i++;
+      try { out[n] = await fn(items[n]); } catch (e) { out[n] = { error: e }; }
+    }
+  }));
+  return out;
+}
+
+export function send(res, status, body, cacheSeconds = 0) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  if (cacheSeconds && status === 200) {
+    res.setHeader("Cache-Control", `public, s-maxage=${cacheSeconds}, stale-while-revalidate=${cacheSeconds * 2}`);
+  }
+  res.end(JSON.stringify(body));
+}
+
+export function fail(res, e) {
+  const status = e instanceof ApiError ? e.status : 500;
+  if (status === 500 && !(e instanceof ApiError)) console.error(e);
+  send(res, status, { error: e instanceof ApiError ? e.message : "Unexpected server error." });
+}

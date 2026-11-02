@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bird Flashcards</title>
+  <meta name="description" content="Learn the birds you're most likely to see on your next trip.">
+  <meta name="theme-color" content="#24493f" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101614" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;1,8..60,400&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="wrap bar-inner">
+      <a class="brand" href="#">Bird Flashcards</a>
+      <span class="net" id="net" hidden>Offline</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- Search view -->
+    <section id="view-search" class="view">
+      <h1 class="lede">Where are you going birding?</h1>
+      <p class="sub">Enter a place. You'll get the birds reported most often on recent eBird checklists nearby, ranked so you can learn the likely ones first.</p>
+      <form id="search-form" class="search" autocomplete="off">
+        <label class="sr" for="q">Place name</label>
+        <input id="q" name="q" type="search" placeholder="e.g. Cape May, NJ" enterkeyhint="search" required minlength="2">
+        <button type="submit" class="btn primary">Search</button>
+      </form>
+      <p id="search-msg" class="msg" role="status"></p>
+      <ul id="places" class="places"></ul>
+
+      <div id="recent-block" hidden>
+        <h2 class="eyebrow">Recent trips</h2>
+        <ul id="recent" class="places"></ul>
+      </div>
+    </section>
+
+    <!-- Species list view -->
+    <section id="view-list" class="view" hidden>
+      <button id="back" class="link-btn" type="button">← New search</button>
+      <h1 id="list-title" class="lede"></h1>
+      <p id="list-meta" class="sub"></p>
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="How many species to show">
+          <button type="button" data-top="25" aria-pressed="true">Top 25</button>
+          <button type="button" data-top="50" aria-pressed="false">Top 50</button>
+          <button type="button" data-top="0" aria-pressed="false">All</button>
+        </div>
+        <span id="list-count" class="count"></span>
+      </div>
+      <p id="list-msg" class="msg" role="status"></p>
+      <ol id="species" class="species"></ol>
+      <p class="fine">“Seen on” is the share of sampled complete checklists that reported the species. Flashcards for this list come next.</p>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    Bird data from <a href="https://ebird.org" target="_blank" rel="noopener">eBird</a>, Cornell Lab of Ornithology. Place search by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>.
+  </footer>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

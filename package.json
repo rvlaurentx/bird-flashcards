@@ -1,0 +1,13 @@
+{
+  "name": "bird-flashcards",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Mobile-first PWA for learning bird identification before a trip.",
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "dev:mock": "EBIRD_MOCK=1 node scripts/dev-server.mjs",
+    "test": "EBIRD_MOCK=1 node --test scripts/*.test.mjs"
+  },
+  "engines": { "node": ">=18" }
+}
