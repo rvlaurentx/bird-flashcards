@@ -143,11 +143,30 @@ function showHint() {
   const c = s.card, hint = cardHints(c)[c.hintsUsed];
   if (!hint) return;
   c.hintsUsed++;
-  if (hint.kind === "choices") showChoices();
-  else if (hint.kind === "photo") showExtraPhoto(c);
-  else if (hint.kind === "sound") showSoundHint(c);
-  else $("#hints").append(el("div", { class: "hint" }, el("span", { class: "hint-label" }, hint.label), el("span", {}, hint.text)));
+  let node;
+  if (hint.kind === "choices") node = showChoices();
+  else if (hint.kind === "photo") node = showExtraPhoto(c);
+  else if (hint.kind === "sound") node = showSoundHint(c);
+  else $("#hints").append(node = el("div", { class: "hint" }, el("span", { class: "hint-label" }, hint.label), el("span", {}, hint.text)));
   renderActions();
+  bringIntoView(node);
+}
+
+// Scroll so a new hint is fully visible: below the sticky header and above
+// the sticky button bar. If it's taller than the gap, show its top.
+function bringIntoView(node) {
+  if (!node) return;
+  requestAnimationFrame(() => {
+    const top = $(".bar").getBoundingClientRect().bottom + 8;
+    const bottom = $("#actions").getBoundingClientRect().top - 8;
+    const r = node.getBoundingClientRect();
+    let dy = 0;
+    if (r.height > bottom - top || r.top < top) dy = r.top - top;
+    else if (r.bottom > bottom) dy = r.bottom - bottom;
+    if (Math.abs(dy) < 2) return;
+    const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollBy({ top: dy, behavior: smooth ? "smooth" : "auto" });
+  });
 }
 
 function showExtraPhoto(c) {
@@ -159,7 +178,7 @@ function showExtraPhoto(c) {
   const fig = el("figure", { class: "photo hint-photo" }, el("div", { class: "photo-frame" }, img), credit);
   img.onerror = () => fig.replaceChildren(el("p", { class: "photo-note" }, "This photo isn't available offline."));
   $("#hints").append(fig);
-  fig.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  return fig;
 }
 
 function showSoundHint(c) {
@@ -168,7 +187,7 @@ function showSoundHint(c) {
   if (!rec) return;
   const node = player(rec, { autoplay: true });
   $("#hints").append(node);
-  node.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  return node;
 }
 
 function showChoices() {
@@ -189,6 +208,7 @@ function showChoices() {
       record(right);
     },
   }, o.comName)));
+  return box;
 }
 
 // Revealed layout: photo shrinks to a banner, hints and choices fold away,

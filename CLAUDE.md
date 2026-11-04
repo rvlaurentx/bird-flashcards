@@ -83,6 +83,9 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
     data source we don't have yet; slot them into `hintsFor()` after family
     when added (confirm placement with the user).
   - Answer side lists all picked recordings (song/call) with credits.
+  - **Each new hint scrolls into view** (user's request) via `bringIntoView()`
+    in `study.js`: fully between the sticky header and the sticky button bar
+    (top-aligned if taller). Checked at 360×640 and 390×844.
   - **Answer must be visible without scrolling** (user's request): on reveal
     the view gets `.revealed` — photo shrinks to a banner (≤30vh), hints and
     choices hide, the answer card follows the photo, page scrolls to top.
