@@ -40,6 +40,9 @@ export async function ebird(path) {
   return res.json();
 }
 
+// A usable coordinate, or NaN (Number(null) would wrongly give 0).
+export const coord = (v) => (v === null || v === undefined || v === "" ? NaN : Number(v));
+
 // Place-name search via Open-Meteo's free geocoder (no key needed).
 export async function geocode(q) {
   if (isMock()) return mockGeocode(q);
@@ -47,12 +50,14 @@ export async function geocode(q) {
   const res = await fetch(url);
   if (!res.ok) throw new ApiError(502, `Place search failed (${res.status}).`);
   const data = await res.json();
-  return (data.results || []).map((r) => ({
-    name: r.name,
-    detail: [r.admin2, r.admin1, r.country].filter(Boolean).join(", "),
-    lat: r.latitude,
-    lng: r.longitude,
-  }));
+  return (data.results || [])
+    .map((r) => ({
+      name: r.name,
+      detail: [r.admin2, r.admin1, r.country].filter(Boolean).join(", "),
+      lat: coord(r.latitude),
+      lng: coord(r.longitude),
+    }))
+    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)); // unusable without coordinates
 }
 
 // Run async fn over items with limited concurrency.

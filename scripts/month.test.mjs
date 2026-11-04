@@ -50,3 +50,25 @@ test("uses the most species-rich checklists", async () => {
   const top = richestFirst(feed).slice(0, 25).map((c) => c.numSpecies);
   assert.ok(avg(top) > avg(feed.map((c) => c.numSpecies)), "sample is richer than average");
 });
+
+test("places without coordinates are dropped or rejected", async () => {
+  const { coord } = await import("../api/_lib/ebird.js");
+  const { hasCoords } = await import("../public/lib.js");
+  assert.ok(Number.isNaN(coord(null)) && Number.isNaN(coord(undefined)) && Number.isNaN(coord("")));
+  assert.equal(coord(-0.6), -0.6);
+  assert.equal(coord("-90.4"), -90.4);
+  assert.ok(hasCoords({ lat: -0.6, lng: -90.4 }));
+  assert.ok(!hasCoords({ lat: null, lng: -90.4 }) && !hasCoords({ name: "x" }) && !hasCoords(undefined));
+  // geocode filtering
+  delete process.env.EBIRD_MOCK;
+  const { geocode } = await import("../api/_lib/ebird.js");
+  const real = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ results: [
+    { name: "Galápagos Islands", admin1: "Galápagos", country: "Ecuador" },
+    { name: "Puerto Ayora", admin1: "Galápagos", country: "Ecuador", latitude: -0.74, longitude: -90.31 },
+  ] }));
+  try {
+    const places = await geocode("Galapagos");
+    assert.deepEqual(places.map((p) => p.name), ["Puerto Ayora"]);
+  } finally { globalThis.fetch = real; process.env.EBIRD_MOCK = "1"; }
+});

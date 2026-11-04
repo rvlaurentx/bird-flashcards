@@ -1,6 +1,6 @@
 // Bird Flashcards — place search → ranked species list → flashcards.
 
-import { $, el, api, load, save, speciesUrl, MONTHS, periodText } from "./lib.js";
+import { $, el, api, load, save, speciesUrl, MONTHS, periodText, coord, hasCoords } from "./lib.js";
 import { LEARNED_BOX } from "./learn.js";
 import { startSession, getProgress } from "./study.js";
 import { SOUND_CHOICES, deckId, getDeck, listDecks, downloadDeck, removeDeck, estimateBytes, formatBytes } from "./decks.js";
@@ -13,7 +13,7 @@ const monthName = (m) => (m ? MONTHS[m - 1] : "recent sightings");
 const off = { mode: "idle", id: null, sounds: 1, done: 0, total: 0, bytes: 0, controller: null, note: "", error: false };
 
 // ---------- storage (per-device conveniences only) ----------
-const getRecent = () => load(RECENT_KEY, []);
+const getRecent = () => load(RECENT_KEY, []).filter(hasCoords);
 function addRecent(p) {
   save(RECENT_KEY, [p, ...getRecent().filter((r) => !(r.lat === p.lat && r.lng === p.lng))].slice(0, 6));
 }
@@ -37,7 +37,7 @@ function placeButton(p, onPick) {
 }
 
 function renderRecent() {
-  const saved = listDecks();
+  const saved = listDecks().filter(hasCoords);
   const savedIds = new Set(saved.map((d) => d.id));
   const recent = getRecent().filter((p) => !savedIds.has(deckId(p)));
   $("#recent-block").hidden = !recent.length;
@@ -76,7 +76,14 @@ function setMonth(m) {
 }
 
 async function openPlace(p, { fromDeck = false } = {}) {
-  p = { name: p.name, detail: p.detail, lat: p.lat, lng: p.lng };
+  p = { name: p.name, detail: p.detail, lat: coord(p.lat), lng: coord(p.lng) };
+  if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) {
+    show("search");
+    const msg = $("#search-msg");
+    msg.className = "msg error";
+    msg.textContent = `“${p.name || "That place"}” came back without map coordinates, so its birds can't be looked up. Try a nearby town or a more specific name.`;
+    return;
+  }
   state.place = p; state.data = null;
   const deck = getDeck(p);
   if (deck) {
