@@ -48,8 +48,12 @@ public release.
    - **Most species-rich first** (user's choice, for a fuller list):
      `richestFirst()` sorts candidates by the feed's `numSpecies` (no extra
      requests). Recent: richest 25 of up to 200. Month: richest per date,
-     then round-robin. Trade-off: percentages run higher than a typical
-     outing (UI says so); `sample.considered` = candidates seen.
+     then round-robin. Percentages run higher than a typical outing (UI
+     says so); `sample.considered` = candidates seen.
+     **Rationale (user):** the app is for studying *before* a trip, so long
+     outings are fine. Top 25 gives a simpler list; "All" is for learning
+     every likely bird, where the biggest checklists matter most. Don't
+     switch back to most-recent sampling without asking.
 3. Fetch each checklist (`/product/checklist/view/{subId}`), keep complete ones
    (`allObsReported`), falling back to all if fewer than 8 are complete.
    At most 3 requests in flight.
