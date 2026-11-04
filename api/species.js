@@ -1,6 +1,9 @@
-// GET /api/species?lat=..&lng=..[&dist=25]
-// Returns species ranked by how often they appear on recent complete eBird
+// GET /api/species?lat=..&lng=..[&dist=25][&month=1..12]
+// Returns species ranked by how often they appear on complete eBird
 // checklists in the county (eBird subnational2 region) around the point.
+// Without `month`: the most recent checklists. With `month`: checklists from
+// that month in the last two years (sampled on several dates), so a trip
+// months away gets the birds of the right season.
 // "freq" = share of sampled complete checklists that reported the species,
 // which is the same idea as eBird's own "frequency" in bar charts.
 
@@ -25,24 +28,60 @@ export default async function handler(req, res) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
       throw new ApiError(400, "lat and lng are required.");
     }
-    send(res, 200, await rankSpecies(lat, lng, dist), 60 * 60 * 12);
+    const monthParam = url.searchParams.get("month");
+    const month = monthParam ? Number(monthParam) : 0;
+    if (monthParam && !(Number.isInteger(month) && month >= 1 && month <= 12)) throw new ApiError(400, "month must be 1–12.");
+    // Past months don't change, so they can be cached for longer.
+    send(res, 200, await rankSpecies(lat, lng, dist, month), month ? 60 * 60 * 24 * 7 : 60 * 60 * 12);
   } catch (e) { fail(res, e); }
 }
 
-export async function rankSpecies(lat, lng, dist) {
+export const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const SAMPLE_DAYS = [3, 10, 17, 24];
+
+// Dates to sample for a month: the most recent finished occurrence of that
+// month and the same month a year earlier, on four days spread through it.
+export function monthDates(month, now = new Date()) {
+  const thisMonth = now.getUTCMonth() + 1;
+  const latest = month < thisMonth ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  return [latest, latest - 1].flatMap((y) => SAMPLE_DAYS.map((d) => ({ y, m: month, d })));
+}
+
+// Take checklists round-robin across the dates so no single day dominates.
+export function interleave(feeds, max) {
+  const out = [];
+  for (let i = 0; out.length < max && feeds.some((f) => i < f.length); i++) {
+    for (const f of feeds) if (i < f.length && out.length < max) out.push(f[i]);
+  }
+  return out;
+}
+
+async function sampleChecklists(region, month) {
+  const usable = (c) => (c.numSpecies ?? 1) > 0;
+  if (!month) return (await ebird(`/product/lists/${region}?maxResults=200`)).filter(usable).slice(0, MAX_CHECKLISTS);
+  const dates = monthDates(month);
+  const feeds = await pool(dates, 2, ({ y, m, d }) => ebird(`/product/lists/${region}/${y}/${m}/${d}?maxResults=50`));
+  return interleave(feeds.map((f) => (Array.isArray(f) ? f.filter(usable) : [])), MAX_CHECKLISTS);
+}
+
+export async function rankSpecies(lat, lng, dist, month = 0) {
   const ll = `lat=${lat.toFixed(2)}&lng=${lng.toFixed(2)}`;
 
   // 1. Nearby hotspots tell us which county the place is in.
   const hotspots = await ebird(`/ref/hotspot/geo?${ll}&dist=${dist}&fmt=json`);
   if (!hotspots.length) throw new ApiError(404, `No eBird hotspots within ${dist} km of this place.`);
   const region = pickRegion(hotspots, lat, lng);
-  const hit = cache.get(region);
+  const cacheKey = `${region}|${month || "recent"}`;
+  const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.result;
 
   // 2. Recent checklists submitted in that region.
-  const feed = await ebird(`/product/lists/${region}?maxResults=200`);
-  const recent = feed.filter((c) => (c.numSpecies ?? 1) > 0).slice(0, MAX_CHECKLISTS);
-  if (!recent.length) throw new ApiError(404, "No recent eBird checklists found for this area.");
+  const recent = await sampleChecklists(region, month);
+  if (!recent.length) {
+    throw new ApiError(404, month
+      ? `No eBird checklists from ${MONTHS[month - 1]} found for this area. Try "Recent sightings".`
+      : "No recent eBird checklists found for this area.");
+  }
 
   // 3. Full checklist details (species on each list).
   const details = (await pool(recent, CONCURRENCY, (c) => ebird(`/product/checklist/view/${c.subId || c.subID}`)))
@@ -93,10 +132,11 @@ export async function rankSpecies(lat, lng, dist) {
   const result = {
     source: "eBird",
     region: { code: region, name: regionName },
+    period: month ? { month, label: MONTHS[month - 1] } : { month: 0, label: "recent" },
     sample: { checklists: used.length, completeOnly: used === complete, from: dates[0] || null, to: dates.at(-1) || null },
     species,
   };
-  cache.set(region, { at: Date.now(), result });
+  cache.set(cacheKey, { at: Date.now(), result });
   return result;
 }
 

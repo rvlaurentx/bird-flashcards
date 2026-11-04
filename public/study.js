@@ -1,6 +1,6 @@
 // Flashcard study screen: photo → hints → answer → "did you know it?".
 
-import { $, el, api, load, save, shuffle, mediaUrl, soundsUrl } from "./lib.js";
+import { $, el, api, load, save, shuffle, mediaUrl, soundsUrl, periodText } from "./lib.js";
 import { grade, sessionOrder, requeue, hintsFor, lookalikes } from "./learn.js";
 
 const PROGRESS_KEY = "bf-progress";
@@ -64,8 +64,8 @@ function player(rec, { autoplay = false } = {}) {
 
 let s = null; // session state
 
-export function startSession({ deck, all, placeName, onExit }) {
-  s = { deck, all, placeName, onExit, queue: sessionOrder(deck, getProgress()), done: 0, firstTry: new Map(), card: null };
+export function startSession({ deck, all, placeName, month = 0, onExit }) {
+  s = { deck, all, placeName, month, onExit, queue: sessionOrder(deck, getProgress()), done: 0, firstTry: new Map(), card: null };
   $("#study-exit").onclick = () => { stopAudio(); onExit(); };
   showCard();
 }
@@ -236,7 +236,7 @@ async function reveal(chosen) {
       : el("p", { class: "ans-result wrong" }, `✗ You chose ${chosen.comName}`)) : null,
     el("h2", { class: "ans-name" }, sp.comName),
     el("p", { class: "ans-sci" }, el("i", {}, sp.sciName), sp.family ? ` · ${sp.family}` : ""),
-    el("p", { class: "ans-freq" }, `Seen on ${pct}% of recent checklists around ${s.placeName}.`),
+    el("p", { class: "ans-freq" }, `Seen on ${pct}% of ${periodText(s.month)} around ${s.placeName}.`),
     el("p", { class: "ans-summary" }),
     el("p", { class: "ans-links" },
       // Macaulay Library media can't be shown in-app without a license

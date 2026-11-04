@@ -89,7 +89,7 @@ async function storeRecording(cache, rec, signal) {
  * `data` is the full species response for the place.
  * onProgress(done, total, bytes) is called after each bird.
  */
-export async function downloadDeck({ place, data, species, top, soundsPerBird, onProgress, signal }) {
+export async function downloadDeck({ place, month = 0, data, species, top, soundsPerBird, onProgress, signal }) {
   const id = deckId(place);
   const cache = await caches.open(cacheName(id));
   try { await navigator.storage?.persist?.(); } catch { /* best effort */ }
@@ -98,7 +98,7 @@ export async function downloadDeck({ place, data, species, top, soundsPerBird, o
   let bytes = 0, done = 0;
   const missing = [];
   try {
-    await put(cache, speciesUrl(place), jsonResponse(data));
+    await put(cache, speciesUrl(place, month), jsonResponse(data));
     let next = 0;
     const worker = async () => {
       while (next < species.length) {
@@ -137,7 +137,7 @@ export async function downloadDeck({ place, data, species, top, soundsPerBird, o
 
   const meta = {
     id, name: place.name, detail: place.detail || "", lat: place.lat, lng: place.lng,
-    savedAt: Date.now(), birds: species.length, top, soundsPerBird, bytes, missing,
+    savedAt: Date.now(), birds: species.length, top, month, soundsPerBird, bytes, missing,
   };
   putMeta(meta);
   return meta;

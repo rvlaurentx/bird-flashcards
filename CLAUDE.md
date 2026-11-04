@@ -37,7 +37,14 @@ public release.
 ### How the species ranking works (`api/species.js`)
 1. Nearby eBird hotspots (`/ref/hotspot/geo`) → pick the most common county
    (`subnational2Code`) among the 25 nearest.
-2. Recent checklists in that county (`/product/lists/{region}`), up to 25.
+2. Checklists in that county, up to 25:
+   - **Recent** (default, `month` absent): `/product/lists/{region}`.
+   - **Trip month** (`&month=1..12`): `/product/lists/{region}/{y}/{m}/{d}`
+     on days 3/10/17/24 of the latest *finished* occurrence of that month and
+     the year before (8 dates, `monthDates()`), taken round-robin
+     (`interleave()`) so no single day dominates. eBird's API has no
+     bar-chart endpoint; this samples the same "share of checklists" metric
+     for the right season.
 3. Fetch each checklist (`/product/checklist/view/{subId}`), keep complete ones
    (`allObsReported`), falling back to all if fewer than 8 are complete.
    At most 3 requests in flight.
@@ -54,8 +61,16 @@ public release.
   If limits are still a problem, persist results in Vercel KV/Blob keyed by
   region (survives cold starts and is shared by all instances).
 - `/api/health` diagnoses both keys (eBird, xeno-canto) without revealing them.
-- **Known limitation:** "recent" means the current season. For a trip months
-  away we'll want month-specific frequency (eBird bar-chart data per month).
+- Month results are CDN-cached 7 days (past months don't change); in-memory
+  cache key is `region|month`.
+- UI: "Trip month" picker on the species list (Recent sightings / Jan–Dec),
+  remembered in localStorage `bf-trip-month`. Answer side says "Seen on X% of
+  May checklists". Decks store `month`; the species response is saved under
+  `speciesUrl(place, month)`. Opening a saved trip (or any saved place
+  offline) switches the picker to the deck's month; a mismatch shows
+  "Saved for July; you're viewing January. Update to save this month."
+- Possible refinement: sample more days for sparse counties, or widen to the
+  state (`subnational1Code`) when a month has too few checklists.
 
 ## Offline design
 - `public/sw.js`: app shell precached; `/api/*` network-first with cache
@@ -131,7 +146,8 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
 4. ✅ Audio (Xeno-canto) — song/call hint + recordings on the answer side
 5. ✅ Offline trip decks (download, manage, study with no signal)
 6. Hint data for size / field marks / habitat (source to be decided)
-7. Optional: month-of-trip frequencies; Play Store wrapper
+7. ✅ Month-of-trip frequencies
+8. Optional: Play Store wrapper
 
 ## Conventions
 - Vanilla HTML/CSS/ES modules, no framework or bundler (keep it simple until

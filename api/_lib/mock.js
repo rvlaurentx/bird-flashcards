@@ -51,13 +51,28 @@ const TAX = Object.fromEntries([
   ...EXTRA.map((t) => [t.speciesCode, t]),
 ]);
 
+// Rough seasonality so month views differ in mock mode: winter visitors are
+// absent in summer, and blackbirds/kingfishers are scarce in deep winter.
+const WINTER_ONLY = new Set(["daejun", "whtspa", "purfin"]);
+const SUMMER_ONLY = new Set(["rewbla", "belkin1", "turvul"]);
+function seasonal(code, month) {
+  if (!month) return 1;
+  if (WINTER_ONLY.has(code)) return [11, 12, 1, 2, 3, 4].includes(month) ? 2.2 : 0;
+  if (SUMMER_ONLY.has(code)) return [12, 1, 2].includes(month) ? 0.1 : 1.6;
+  return 1;
+}
+
+// Checklist number n encodes its month (n = month*1000 + ...; 0 = recent feed).
 function checklist(n) {
   const r = rand(n * 7919 + 1);
-  const obs = SPECIES.filter((s) => r() < s[6]).map((s) => ({ speciesCode: s[0], howManyStr: String(1 + Math.floor(r() * 6)) }));
+  const month = Math.floor(n / 1000);
+  const obs = SPECIES.filter((s) => r() < Math.min(0.97, s[6] * seasonal(s[0], month))).map((s) => ({ speciesCode: s[0], howManyStr: String(1 + Math.floor(r() * 6)) }));
   if (r() < 0.15) obs.push({ speciesCode: "woodpe1", howManyStr: "1" });
   if (r() < 0.2) obs.push({ speciesCode: "yshfli", howManyStr: "1" });
   const day = String(1 + (n % 28)).padStart(2, "0");
-  return { subId: `S${100000 + n}`, allObsReported: n % 9 !== 0, obsDt: `2026-10-${day} 07:30`, numSpecies: obs.length, obs };
+  const mm = String(month || 10).padStart(2, "0");
+  const year = month ? (n % 1000 >= 500 ? 2024 : 2025) : 2026;
+  return { subId: `S${100000 + n}`, allObsReported: n % 9 !== 0, obsDt: `${year}-${mm}-${day} 07:30`, numSpecies: obs.length, obs };
 }
 
 export async function mockEbird(path) {
@@ -69,6 +84,12 @@ export async function mockEbird(path) {
       locId: `L${9000 + i}`, locName: `Sample Hotspot ${i + 1}`, countryCode: "US", subnational1Code: "US-XX", subnational2Code: "US-XX-001",
       lat: lat + (i - 6) * 0.01, lng: lng + (i % 4) * 0.01, numSpeciesAllTime: 120 + i * 7,
     }));
+  }
+  const dated = route.match(/^\/product\/lists\/[^/]+\/(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (dated) {
+    const [, y, m, d] = dated.map(Number);
+    // n = month*1000 + (older year ? 500 : 0) + day*10 + i
+    return Array.from({ length: 6 }, (_, i) => ({ subId: `S${100000 + m * 1000 + (y % 2 === 0 ? 500 : 0) + d * 10 + i}`, numSpecies: 12, obsDt: `${y}-${m}-${d}` }));
   }
   if (route.startsWith("/product/lists/")) return Array.from({ length: 60 }, (_, i) => ({ subId: `S${100000 + i}`, numSpecies: 12, obsDt: "2026-10-01" }));
   if (route.startsWith("/product/checklist/view/")) return checklist(Number(route.split("/").pop().slice(1)) - 100000);

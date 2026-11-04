@@ -1,12 +1,14 @@
 // Bird Flashcards — place search → ranked species list → flashcards.
 
-import { $, el, api, load, save, speciesUrl } from "./lib.js";
+import { $, el, api, load, save, speciesUrl, MONTHS, periodText } from "./lib.js";
 import { LEARNED_BOX } from "./learn.js";
 import { startSession, getProgress } from "./study.js";
 import { SOUND_CHOICES, deckId, getDeck, listDecks, downloadDeck, removeDeck, estimateBytes, formatBytes } from "./decks.js";
 
 const RECENT_KEY = "bf-recent-places";
-const state = { place: null, data: null, top: 25 };
+const MONTH_KEY = "bf-trip-month";
+const state = { place: null, data: null, top: 25, month: Number(load(MONTH_KEY, 0)) || 0 };
+const monthName = (m) => (m ? MONTHS[m - 1] : "recent sightings");
 // Offline-save panel. `id` ties a running download to its place.
 const off = { mode: "idle", id: null, sounds: 1, done: 0, total: 0, bytes: 0, controller: null, note: "", error: false };
 
@@ -42,7 +44,7 @@ function renderRecent() {
   $("#recent").replaceChildren(...recent.map((p) => placeButton(p, openPlace)));
   $("#saved-block").hidden = !saved.length;
   $("#saved").replaceChildren(...saved.map((d) => {
-    const li = placeButton({ ...d, detail: `${d.birds} birds · ${formatBytes(d.bytes)} · saved ${fmtDay(d.savedAt)}` }, () => openPlace(d));
+    const li = placeButton({ ...d, detail: `${d.birds} birds · ${d.month ? MONTHS[d.month - 1] : "recent sightings"} · ${formatBytes(d.bytes)} · saved ${fmtDay(d.savedAt)}` }, () => openPlace(d, { fromDeck: true }));
     li.querySelector("button").append(el("span", { class: "p-badge" }, "✓ Works offline"));
     return li;
   }));
@@ -68,11 +70,26 @@ async function searchPlaces(q) {
   } catch (e) { msg.className = "msg error"; msg.textContent = e.message; }
 }
 
-async function openPlace(p) {
+function setMonth(m) {
+  state.month = m;
+  $("#month").value = String(m);
+}
+
+async function openPlace(p, { fromDeck = false } = {}) {
   p = { name: p.name, detail: p.detail, lat: p.lat, lng: p.lng };
   state.place = p; state.data = null;
   const deck = getDeck(p);
-  if (deck) { p.detail = deck.detail; setTop(deck.top ?? 25); }
+  if (deck) {
+    p.detail = deck.detail; setTop(deck.top ?? 25);
+    // Opening a saved trip (or any saved place while offline) shows the month it was saved for.
+    if (fromDeck || !navigator.onLine) setMonth(deck.month ?? 0);
+  }
+  $("#month").value = String(state.month);
+  loadSpecies();
+}
+
+async function loadSpecies() {
+  const p = state.place;
   if (off.mode !== "downloading") Object.assign(off, { mode: "idle", note: "", error: false });
   $("#offline-box").hidden = true;
   addRecent(p);
@@ -83,15 +100,23 @@ async function openPlace(p) {
   $("#list-count").textContent = "";
   $("#study-start").hidden = true;
   const msg = $("#list-msg");
-  msg.className = "msg"; msg.textContent = "Reading recent eBird checklists… this can take a few seconds.";
+  msg.className = "msg";
+  msg.textContent = state.month
+    ? `Reading eBird checklists from ${MONTHS[state.month - 1]} in past years… this can take a few seconds.`
+    : "Reading recent eBird checklists… this can take a few seconds.";
+  const month = state.month;
   try {
     // Round coordinates so nearby searches share one cached response.
-    const data = await api(speciesUrl(p));
+    const data = await api(speciesUrl(p, month));
+    if (state.place !== p || state.month !== month) return; // changed meanwhile
     state.data = data;
     msg.textContent = "";
     const s = data.sample;
     const range = s.from && s.to ? ` from ${fmtDate(s.from)} to ${fmtDate(s.to)}` : "";
-    $("#list-meta").textContent = `${data.region.name} · ${s.checklists} recent ${s.completeOnly ? "complete " : ""}checklists${range}`;
+    const kind = `${s.completeOnly ? "complete " : ""}checklists`;
+    $("#list-meta").textContent = month
+      ? `${data.region.name} · ${s.checklists} ${kind} from ${MONTHS[month - 1]} (${yearsOf(s)})`
+      : `${data.region.name} · ${s.checklists} recent ${kind}${range}`;
     renderSpecies();
   } catch (e) { msg.className = "msg error"; msg.textContent = e.message; }
 }
@@ -184,10 +209,11 @@ function renderOffline() {
   if (deck) {
     const parts = [
       el("p", { class: "off-title saved" }, "✓ Saved for offline use"),
-      el("p", { class: "off-note" }, `${deck.birds} birds · ${formatBytes(deck.bytes)} · saved ${fmtDay(deck.savedAt)}${deck.soundsPerBird ? "" : " · no sounds"}`),
+      el("p", { class: "off-note" }, `${deck.birds} birds · ${monthName(deck.month ?? 0)} · ${formatBytes(deck.bytes)} · saved ${fmtDay(deck.savedAt)}${deck.soundsPerBird ? "" : " · no sounds"}`),
     ];
+    if ((deck.month ?? 0) !== state.month) parts.push(el("p", { class: "off-note" }, `Saved for ${monthName(deck.month ?? 0)}; you're viewing ${monthName(state.month)}. Update to save this month instead.`));
     if (deck.missing?.length) parts.push(el("p", { class: "off-note" }, `No photos saved for: ${deck.missing.join(", ")}.`));
-    if (list.length !== deck.birds) parts.push(el("p", { class: "off-note" }, `You're viewing ${list.length} birds. Update to save these instead.`));
+    else if (list.length !== deck.birds) parts.push(el("p", { class: "off-note" }, `You're viewing ${list.length} birds. Update to save these instead.`));
     if (note) parts.push(note);
     parts.push(el("div", { class: "row" },
       btn("Update", "ghost", () => { Object.assign(off, { mode: "choose", id, sounds: deck.soundsPerBird ?? 1, note: "" }); renderOffline(); }, { disabled: !navigator.onLine }),
@@ -199,17 +225,17 @@ function renderOffline() {
   box.replaceChildren(
     btn(navigator.onLine ? "Save for offline use" : "Connect to the internet to save this trip", "ghost wide",
       () => { Object.assign(off, { mode: "choose", id, note: "", error: false }); renderOffline(); }, { disabled: !navigator.onLine }),
-    note,
+    ...(note ? [note] : []),
   );
 }
 
 async function startDownload() {
-  const place = state.place, data = state.data, species = visible(), id = deckId(place);
+  const place = state.place, data = state.data, species = visible(), id = deckId(place), month = state.month;
   Object.assign(off, { mode: "downloading", id, done: 0, total: species.length, bytes: 0, controller: new AbortController(), note: "", error: false });
   renderOffline();
   try {
     const meta = await downloadDeck({
-      place, data, species, top: state.top, soundsPerBird: off.sounds, signal: off.controller.signal,
+      place, month, data, species, top: state.top, soundsPerBird: off.sounds, signal: off.controller.signal,
       onProgress: (done, total, bytes) => { Object.assign(off, { done, total, bytes }); if (state.place && deckId(state.place) === id) renderOffline(); },
     });
     Object.assign(off, { mode: "idle", note: meta.missing.length ? "" : "Ready. This trip now works with no signal.", error: false });
@@ -220,6 +246,11 @@ async function startDownload() {
   off.controller = null;
   renderRecent();
   if (state.place && deckId(state.place) === id) renderOffline();
+}
+
+function yearsOf(sample) {
+  const ys = [sample.from, sample.to].filter(Boolean).map((d) => d.slice(0, 4));
+  return [...new Set(ys)].sort().reverse().join(" and ") || "past years";
 }
 
 function fmtDate(d) {
@@ -237,9 +268,14 @@ $("#back").addEventListener("click", () => { show("search"); renderRecent(); });
 $("#study-start").addEventListener("click", () => {
   show("study");
   startSession({
-    deck: visible(), all: state.data.species, placeName: state.place.name,
+    deck: visible(), all: state.data.species, placeName: state.place.name, month: state.month,
     onExit: () => { show("list"); renderSpecies(); },
   });
+});
+$("#month").addEventListener("change", () => {
+  setMonth(Number($("#month").value));
+  save(MONTH_KEY, state.month);
+  if (state.place) loadSpecies();
 });
 document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => {
   setTop(Number(b.dataset.top));
