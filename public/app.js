@@ -1,11 +1,14 @@
 // Bird Flashcards — place search → ranked species list → flashcards.
 
-import { $, api, load, save } from "./lib.js";
+import { $, el, api, load, save, speciesUrl } from "./lib.js";
 import { LEARNED_BOX } from "./learn.js";
 import { startSession, getProgress } from "./study.js";
+import { SOUND_CHOICES, deckId, getDeck, listDecks, downloadDeck, removeDeck, estimateBytes, formatBytes } from "./decks.js";
 
 const RECENT_KEY = "bf-recent-places";
 const state = { place: null, data: null, top: 25 };
+// Offline-save panel. `id` ties a running download to its place.
+const off = { mode: "idle", id: null, sounds: 1, done: 0, total: 0, bytes: 0, controller: null, note: "", error: false };
 
 // ---------- storage (per-device conveniences only) ----------
 const getRecent = () => load(RECENT_KEY, []);
@@ -32,9 +35,24 @@ function placeButton(p, onPick) {
 }
 
 function renderRecent() {
-  const recent = getRecent();
+  const saved = listDecks();
+  const savedIds = new Set(saved.map((d) => d.id));
+  const recent = getRecent().filter((p) => !savedIds.has(deckId(p)));
   $("#recent-block").hidden = !recent.length;
   $("#recent").replaceChildren(...recent.map((p) => placeButton(p, openPlace)));
+  $("#saved-block").hidden = !saved.length;
+  $("#saved").replaceChildren(...saved.map((d) => {
+    const li = placeButton({ ...d, detail: `${d.birds} birds · ${formatBytes(d.bytes)} · saved ${fmtDay(d.savedAt)}` }, () => openPlace(d));
+    li.querySelector("button").append(el("span", { class: "p-badge" }, "✓ Works offline"));
+    return li;
+  }));
+}
+
+const fmtDay = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+function setTop(n) {
+  state.top = n;
+  document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", String(Number(x.dataset.top) === n)));
 }
 
 async function searchPlaces(q) {
@@ -51,7 +69,12 @@ async function searchPlaces(q) {
 }
 
 async function openPlace(p) {
+  p = { name: p.name, detail: p.detail, lat: p.lat, lng: p.lng };
   state.place = p; state.data = null;
+  const deck = getDeck(p);
+  if (deck) { p.detail = deck.detail; setTop(deck.top ?? 25); }
+  if (off.mode !== "downloading") Object.assign(off, { mode: "idle", note: "", error: false });
+  $("#offline-box").hidden = true;
   addRecent(p);
   show("list");
   $("#list-title").textContent = p.name;
@@ -63,7 +86,7 @@ async function openPlace(p) {
   msg.className = "msg"; msg.textContent = "Reading recent eBird checklists… this can take a few seconds.";
   try {
     // Round coordinates so nearby searches share one cached response.
-    const data = await api(`/api/species?lat=${p.lat.toFixed(2)}&lng=${p.lng.toFixed(2)}`);
+    const data = await api(speciesUrl(p));
     state.data = data;
     msg.textContent = "";
     const s = data.sample;
@@ -84,6 +107,7 @@ function renderSpecies() {
   const btn = $("#study-start");
   btn.hidden = !list.length;
   btn.textContent = `Study these ${list.length} birds`;
+  renderOffline();
   $("#species").replaceChildren(...list.map((sp, i) => {
     const li = document.createElement("li");
     li.className = "sp";
@@ -99,6 +123,103 @@ function renderSpecies() {
     li.querySelector(".sp-fam").textContent = sp.family ? `· ${sp.family}` : "";
     return li;
   }));
+}
+
+// ---------- offline trip decks ----------
+function renderOffline() {
+  const box = $("#offline-box");
+  if (!state.data || !state.place) { box.hidden = true; return; }
+  box.hidden = false;
+  box.classList.remove("bare");
+  const id = deckId(state.place);
+  const deck = getDeck(state.place);
+  const list = visible();
+  const mine = off.id === id;
+  const mode = off.mode === "downloading" && !mine ? "busy" : mine || off.mode === "downloading" ? off.mode : "idle";
+  const btn = (label, cls, onclick, extra = {}) => el("button", { type: "button", class: `btn ${cls}`, onclick, ...extra }, label);
+  const note = off.note && mine ? el("p", { class: `off-note${off.error ? " error" : ""}` }, off.note) : null;
+
+  if (mode === "downloading") {
+    const pct = off.total ? Math.round((off.done / off.total) * 100) : 0;
+    box.replaceChildren(
+      el("p", { class: "off-title" }, "Saving for offline use…"),
+      el("div", { class: "meter" }, el("i", { style: `width:${pct}%` })),
+      el("p", { class: "off-note" }, `${off.done} of ${off.total} birds · ${formatBytes(off.bytes)} so far. Keep the app open.`),
+      btn("Cancel", "ghost wide", () => off.controller?.abort()),
+    );
+    return;
+  }
+  if (mode === "busy") {
+    box.replaceChildren(el("p", { class: "off-note" }, "Another trip is being saved. You can save this one when it finishes."));
+    return;
+  }
+  if (mode === "choose") {
+    const est = () => `About ${formatBytes(estimateBytes(list.length, off.sounds))} for ${list.length} birds (2 photos each${off.sounds ? ", plus sounds" : ""}).`;
+    const estP = el("p", { class: "off-note" }, est());
+    const opts = el("fieldset", { class: "sound-opts" }, el("legend", {}, "Sounds to save"),
+      ...SOUND_CHOICES.map((c) => el("label", {},
+        el("input", { type: "radio", name: "deck-sounds", id: `deck-sounds-${c.id}`, value: c.id, checked: off.sounds === c.id,
+          onchange: () => { off.sounds = c.id; estP.textContent = est(); } }),
+        el("span", {}, c.label), el("span", { class: "opt-note" }, c.note))));
+    box.replaceChildren(
+      el("p", { class: "off-title" }, deck ? "Update the saved trip" : `Save these ${list.length} birds for offline use`),
+      opts, estP,
+      el("div", { class: "row" }, btn("Cancel", "ghost", () => { off.mode = "idle"; renderOffline(); }), btn("Download", "primary", startDownload)),
+    );
+    return;
+  }
+  if (mode === "confirmRemove") {
+    box.replaceChildren(
+      el("p", { class: "off-title" }, `Remove the offline copy of ${state.place.name}?`),
+      el("p", { class: "off-note" }, "Your learning progress is kept. You can save the trip again later."),
+      el("div", { class: "row" }, btn("Keep it", "ghost", () => { off.mode = "idle"; renderOffline(); }), btn("Remove", "primary", async () => {
+        await removeDeck(id);
+        Object.assign(off, { mode: "idle", id, note: "Offline copy removed.", error: false });
+        renderOffline();
+      })),
+    );
+    return;
+  }
+  // idle
+  if (deck) {
+    const parts = [
+      el("p", { class: "off-title saved" }, "✓ Saved for offline use"),
+      el("p", { class: "off-note" }, `${deck.birds} birds · ${formatBytes(deck.bytes)} · saved ${fmtDay(deck.savedAt)}${deck.soundsPerBird ? "" : " · no sounds"}`),
+    ];
+    if (deck.missing?.length) parts.push(el("p", { class: "off-note" }, `No photos saved for: ${deck.missing.join(", ")}.`));
+    if (list.length !== deck.birds) parts.push(el("p", { class: "off-note" }, `You're viewing ${list.length} birds. Update to save these instead.`));
+    if (note) parts.push(note);
+    parts.push(el("div", { class: "row" },
+      btn("Update", "ghost", () => { Object.assign(off, { mode: "choose", id, sounds: deck.soundsPerBird ?? 1, note: "" }); renderOffline(); }, { disabled: !navigator.onLine }),
+      btn("Remove", "ghost", () => { Object.assign(off, { mode: "confirmRemove", id, note: "" }); renderOffline(); })));
+    box.replaceChildren(...parts);
+    return;
+  }
+  box.classList.add("bare");
+  box.replaceChildren(
+    btn(navigator.onLine ? "Save for offline use" : "Connect to the internet to save this trip", "ghost wide",
+      () => { Object.assign(off, { mode: "choose", id, note: "", error: false }); renderOffline(); }, { disabled: !navigator.onLine }),
+    note,
+  );
+}
+
+async function startDownload() {
+  const place = state.place, data = state.data, species = visible(), id = deckId(place);
+  Object.assign(off, { mode: "downloading", id, done: 0, total: species.length, bytes: 0, controller: new AbortController(), note: "", error: false });
+  renderOffline();
+  try {
+    const meta = await downloadDeck({
+      place, data, species, top: state.top, soundsPerBird: off.sounds, signal: off.controller.signal,
+      onProgress: (done, total, bytes) => { Object.assign(off, { done, total, bytes }); if (state.place && deckId(state.place) === id) renderOffline(); },
+    });
+    Object.assign(off, { mode: "idle", note: meta.missing.length ? "" : "Ready. This trip now works with no signal.", error: false });
+  } catch (e) {
+    const cancelled = e?.name === "AbortError";
+    Object.assign(off, { mode: "idle", note: cancelled ? "Download cancelled. Nothing was saved." : `Couldn't save this trip: ${e.message}`, error: !cancelled });
+  }
+  off.controller = null;
+  renderRecent();
+  if (state.place && deckId(state.place) === id) renderOffline();
 }
 
 function fmtDate(d) {
@@ -121,12 +242,11 @@ $("#study-start").addEventListener("click", () => {
   });
 });
 document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => {
-  state.top = Number(b.dataset.top);
-  document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  setTop(Number(b.dataset.top));
   renderSpecies();
 }));
 
-function updateNet() { $("#net").hidden = navigator.onLine; }
+function updateNet() { $("#net").hidden = navigator.onLine; if (!$("#view-list").hidden) renderOffline(); }
 addEventListener("online", updateNet);
 addEventListener("offline", updateNet);
 updateNet();

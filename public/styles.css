@@ -99,6 +99,24 @@ main { padding-block: 24px 8px; }
   .sp-meter i { transition: width .4s ease-out; }
 }
 
+/* ---------- offline trip decks ---------- */
+.offline-box { display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.offline-box p { margin: 0; }
+.offline-box .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.offline-box .btn { min-height: 44px; }
+.offline-box.bare { background: none; border: 0; padding: 0; }
+.off-title { font: 700 1rem/1.3 var(--font-display); }
+.off-title.saved { color: var(--right); }
+.off-note { color: var(--muted); font-size: .9rem; }
+.off-note.error { color: var(--warn); }
+.sound-opts { display: grid; gap: 6px; border: 0; margin: 0; padding: 0; }
+.sound-opts legend { font: 500 .7rem/1 var(--font-data); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 6px; padding: 0; }
+.sound-opts label { display: flex; gap: 10px; align-items: center; min-height: 40px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.sound-opts label:has(input:checked) { border-color: var(--accent); }
+.sound-opts input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; }
+.sound-opts .opt-note { color: var(--muted); font-size: .85rem; margin-left: auto; }
+.places .p-badge { font: 500 .75rem/1.2 var(--font-data); color: var(--right); }
+
 /* ---------- study ---------- */
 :root { --photo-bg: #d9e2dc; --right: #2f7d4f; --wrong: #b4442f; }
 @media (prefers-color-scheme: dark) { :root { --photo-bg: #1f2925; --right: #6fcf97; --wrong: #f08a73; } }

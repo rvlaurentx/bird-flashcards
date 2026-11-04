@@ -36,8 +36,13 @@
       <p id="search-msg" class="msg" role="status"></p>
       <ul id="places" class="places"></ul>
 
+      <div id="saved-block" hidden>
+        <h2 class="eyebrow">Saved for offline</h2>
+        <ul id="saved" class="places"></ul>
+      </div>
+
       <div id="recent-block" hidden>
-        <h2 class="eyebrow">Recent trips</h2>
+        <h2 class="eyebrow">Recent places</h2>
         <ul id="recent" class="places"></ul>
       </div>
     </section>
@@ -57,6 +62,7 @@
       </div>
       <p id="list-msg" class="msg" role="status"></p>
       <button id="study-start" type="button" class="btn primary wide" hidden>Study these birds</button>
+      <div id="offline-box" class="offline-box" hidden></div>
       <ol id="species" class="species"></ol>
       <p class="fine">Percentages are the share of sampled complete checklists that reported the species. <span class="learned-dot" aria-hidden="true"></span> marks birds you've learned.</p>
     </section>

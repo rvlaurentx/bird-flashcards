@@ -62,14 +62,32 @@ public release.
   fallback (any place opened before works offline); Google Fonts cached;
   iNaturalist photos cache-first (`media-v1`, ~400 max), so birds you've
   already studied keep their photos offline.
-- **Audio is not cached yet.** `<audio>` uses range requests (HTTP 206),
-  which the Cache API can't store as-is. Trip decks must download each
-  recording in full (`fetch` → blob) and serve it from IndexedDB/Cache with
-  a full 200 response.
-- Next: an explicit **"Download trip deck"** action that stores the species
-  list, chosen photos and audio for a trip in a dedicated cache (plus deck
-  metadata/progress in IndexedDB), shows the download size first, and lets
-  the user delete old decks. Bump `VERSION` in `sw.js` when shell files change.
+- **Offline trip decks** (`public/decks.js`, built):
+  - "Save for offline use" on a place's species list saves the list being
+    viewed (Top 25/50/All): the species response, 2 photos per bird, and
+    sounds by choice — none / song only (default) / song and call. Shows an
+    estimate first, progress + Cancel while saving; a cancelled or failed
+    save deletes the partial deck.
+  - One Cache Storage cache per deck, `deck-<lat2>,<lng2>`, holding API JSON
+    under the **exact URLs the app requests** (built only via `lib.js`
+    `speciesUrl/mediaUrl/soundsUrl/audioUrl`) plus photo and audio files.
+    Saved media/sounds JSON is trimmed to what was actually stored, and
+    recording URLs are rewritten to `/api/audio?id=N`.
+  - `sw.js` checks `deck-*` caches **first** for `/api/*` and iNaturalist
+    images (works with no signal and doesn't wait on a weak one), answers
+    audio range requests with 206 slices, and never deletes `deck-*` caches
+    on update. Consequence: a saved place's list only changes via "Update".
+  - `/api/audio?id=N` proxies the xeno-canto file so the browser gets a
+    complete same-origin copy (Vercel limit ~4.5 MB; capped at 4 MB).
+  - Photos are fetched CORS first (size known), else opaque (`no-cors`);
+    opaque entries count heavily against browser quota. QuotaExceeded stops
+    the save with a clear message. `navigator.storage.persist()` is requested.
+  - Deck metadata (name, birds, bytes, date, sounds choice, birds without
+    photos) is in localStorage `bf-decks`; saved trips list on the start
+    screen ("✓ Works offline"). Progress stays in localStorage `bf-progress`.
+  - Tested end to end in Chromium with mock data: save → offline → reload →
+    open saved trip → study with photos, all hints and audio → remove.
+- Bump `VERSION` in `sw.js` when shell files change.
 
 ## Learning design (confirmed by the user)
 Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
@@ -111,7 +129,7 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
 2. ✅ Flashcard flow (photo → hints → answer; spaced repetition)
 3. ✅ Photos (iNaturalist, licensed + attributed) — pulled forward; cards need them
 4. ✅ Audio (Xeno-canto) — song/call hint + recordings on the answer side
-5. Offline trip decks (download, manage, study with no signal)
+5. ✅ Offline trip decks (download, manage, study with no signal)
 6. Hint data for size / field marks / habitat (source to be decided)
 7. Optional: month-of-trip frequencies; Play Store wrapper
 

@@ -30,3 +30,11 @@ export function shuffle(a) {
   for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; }
   return b;
 }
+
+// API addresses in one place. Trip decks store responses under exactly these
+// URLs, and the service worker serves them back offline, so the study screen
+// and the deck downloader must build them identically.
+export const speciesUrl = (p) => `/api/species?lat=${p.lat.toFixed(2)}&lng=${p.lng.toFixed(2)}`;
+export const mediaUrl = (sp) => `/api/media?sci=${encodeURIComponent(sp.sciName)}&name=${encodeURIComponent(sp.comName)}`;
+export const soundsUrl = (sp) => `/api/sounds?sci=${encodeURIComponent(sp.sciName)}&name=${encodeURIComponent(sp.comName)}`;
+export const audioUrl = (recId) => `/api/audio?id=${String(recId).replace(/\D/g, "")}`;

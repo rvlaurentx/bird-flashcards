@@ -105,15 +105,19 @@ export function mockMedia(sci, name) {
 }
 
 // A short generated tone (WAV) per species, so audio UI can be tried offline.
-function toneWav(freq) {
+function toneBuffer(freq) {
   const rate = 8000, n = rate * 0.6, data = Buffer.alloc(n * 2);
   for (let i = 0; i < n; i++) data.writeInt16LE(Math.round(Math.sin((2 * Math.PI * freq * i) / rate) * 8000 * Math.min(1, (n - i) / 800)), i * 2);
   const h = Buffer.alloc(44);
   h.write("RIFF", 0); h.writeUInt32LE(36 + data.length, 4); h.write("WAVEfmt ", 8); h.writeUInt32LE(16, 16);
   h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(rate, 24); h.writeUInt32LE(rate * 2, 28);
   h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write("data", 36); h.writeUInt32LE(data.length, 40);
-  return "data:audio/wav;base64," + Buffer.concat([h, data]).toString("base64");
+  return Buffer.concat([h, data]);
 }
+const toneWav = (freq) => "data:audio/wav;base64," + toneBuffer(freq).toString("base64");
+
+// Bytes for /api/audio in mock mode (id 1 = song tone, 2 = call tone).
+export function mockAudio(id) { return toneBuffer(Number(id) === 2 ? 1300 : 900); }
 
 export function mockSounds(sci, name) {
   const f = 600 + ([...(sci || name)].reduce((a, c) => a + c.charCodeAt(0), 0) % 1200);

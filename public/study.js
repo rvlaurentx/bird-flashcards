@@ -1,6 +1,6 @@
 // Flashcard study screen: photo → hints → answer → "did you know it?".
 
-import { $, el, api, load, save, shuffle } from "./lib.js";
+import { $, el, api, load, save, shuffle, mediaUrl, soundsUrl } from "./lib.js";
 import { grade, sessionOrder, requeue, hintsFor, lookalikes } from "./learn.js";
 
 const PROGRESS_KEY = "bf-progress";
@@ -11,7 +11,7 @@ export const getProgress = () => load(PROGRESS_KEY, {});
 
 function mediaFor(sp) {
   if (!media.has(sp.code)) {
-    const p = api(`/api/media?sci=${encodeURIComponent(sp.sciName)}&name=${encodeURIComponent(sp.comName)}`)
+    const p = api(mediaUrl(sp))
       .catch(() => ({ photos: [], summary: null }));
     media.set(sp.code, p);
   }
@@ -20,7 +20,7 @@ function mediaFor(sp) {
 
 function soundsFor(sp) {
   if (!sounds.has(sp.code)) {
-    const p = api(`/api/sounds?sci=${encodeURIComponent(sp.sciName)}&name=${encodeURIComponent(sp.comName)}`)
+    const p = api(soundsUrl(sp))
       .catch(() => ({ recordings: [] }));
     sounds.set(sp.code, p);
   }
