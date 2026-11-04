@@ -45,6 +45,11 @@ public release.
      (`interleave()`) so no single day dominates. eBird's API has no
      bar-chart endpoint; this samples the same "share of checklists" metric
      for the right season.
+   - **Most species-rich first** (user's choice, for a fuller list):
+     `richestFirst()` sorts candidates by the feed's `numSpecies` (no extra
+     requests). Recent: richest 25 of up to 200. Month: richest per date,
+     then round-robin. Trade-off: percentages run higher than a typical
+     outing (UI says so); `sample.considered` = candidates seen.
 3. Fetch each checklist (`/product/checklist/view/{subId}`), keep complete ones
    (`allObsReported`), falling back to all if fewer than 8 are complete.
    At most 3 requests in flight.

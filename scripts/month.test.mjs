@@ -36,3 +36,17 @@ test("URLs and labels include the month", () => {
   assert.equal(periodText(0), "recent checklists");
   assert.equal(periodText(5), "May checklists");
 });
+
+test("uses the most species-rich checklists", async () => {
+  const { richestFirst } = await import("../api/species.js");
+  assert.deepEqual(richestFirst([{ subId: "a", numSpecies: 5 }, { subId: "b", numSpecies: 40 }, { subId: "c", numSpecies: 5 }, { subId: "d" }]).map((c) => c.subId), ["b", "a", "c", "d"]);
+  process.env.EBIRD_MOCK = "1";
+  const { mockEbird } = await import("../api/_lib/mock.js");
+  const feed = await mockEbird("/product/lists/US-XX-001?maxResults=200");
+  const r = await rankSpecies(10.11, 10.11, 25, 0);
+  assert.equal(r.sample.considered, feed.length);
+  assert.equal(r.sample.richest, true);
+  const avg = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const top = richestFirst(feed).slice(0, 25).map((c) => c.numSpecies);
+  assert.ok(avg(top) > avg(feed.map((c) => c.numSpecies)), "sample is richer than average");
+});

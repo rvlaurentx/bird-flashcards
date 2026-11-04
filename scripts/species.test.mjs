@@ -12,5 +12,5 @@ test("ranks species by checklist frequency and filters non-species taxa", async 
   assert.ok(!r.species.some((s) => s.code === "woodpe1"), "spuh excluded");
   assert.ok(!r.species.some((s) => s.code === "yshfli"), "subspecies group rolled up");
   assert.ok(r.species.every((s) => s.freq > 0 && s.freq <= 1));
-  assert.ok(["norcar", "moudov"].includes(r.species[0].code));
+  assert.ok(["norcar", "amerob", "moudov", "blujay"].includes(r.species[0].code), "a very common bird ranks first");
 });

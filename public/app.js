@@ -113,10 +113,11 @@ async function loadSpecies() {
     msg.textContent = "";
     const s = data.sample;
     const range = s.from && s.to ? ` from ${fmtDate(s.from)} to ${fmtDate(s.to)}` : "";
-    const kind = `${s.completeOnly ? "complete " : ""}checklists`;
+    const kind = `${s.richest ? "most species-rich " : ""}${s.completeOnly ? "complete " : ""}checklists`;
+    const of = s.considered ? ` of ${s.considered}` : "";
     $("#list-meta").textContent = month
-      ? `${data.region.name} · ${s.checklists} ${kind} from ${MONTHS[month - 1]} (${yearsOf(s)})`
-      : `${data.region.name} · ${s.checklists} recent ${kind}${range}`;
+      ? `${data.region.name} · ${s.checklists} ${kind}${of} from ${MONTHS[month - 1]} (${yearsOf(s)})`
+      : `${data.region.name} · ${s.checklists} ${kind}${of} recent${range}`;
     renderSpecies();
   } catch (e) { msg.className = "msg error"; msg.textContent = e.message; }
 }

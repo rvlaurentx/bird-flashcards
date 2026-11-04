@@ -89,9 +89,12 @@ export async function mockEbird(path) {
   if (dated) {
     const [, y, m, d] = dated.map(Number);
     // n = month*1000 + (older year ? 500 : 0) + day*10 + i
-    return Array.from({ length: 6 }, (_, i) => ({ subId: `S${100000 + m * 1000 + (y % 2 === 0 ? 500 : 0) + d * 10 + i}`, numSpecies: 12, obsDt: `${y}-${m}-${d}` }));
+    return Array.from({ length: 6 }, (_, i) => {
+      const n = m * 1000 + (y % 2 === 0 ? 500 : 0) + d * 10 + i;
+      return { subId: `S${100000 + n}`, numSpecies: checklist(n).numSpecies, obsDt: `${y}-${m}-${d}` };
+    });
   }
-  if (route.startsWith("/product/lists/")) return Array.from({ length: 60 }, (_, i) => ({ subId: `S${100000 + i}`, numSpecies: 12, obsDt: "2026-10-01" }));
+  if (route.startsWith("/product/lists/")) return Array.from({ length: 60 }, (_, i) => ({ subId: `S${100000 + i}`, numSpecies: checklist(i).numSpecies, obsDt: "2026-10-01" }));
   if (route.startsWith("/product/checklist/view/")) return checklist(Number(route.split("/").pop().slice(1)) - 100000);
   if (route === "/ref/taxonomy/ebird") return (q.get("species") || "").split(",").map((c) => TAX[c]).filter(Boolean);
   if (route.startsWith("/ref/region/info/")) return { result: "Sample County (demo data)" };

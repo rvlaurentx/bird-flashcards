@@ -1,4 +1,5 @@
 // GET /api/species?lat=..&lng=..[&dist=25][&month=1..12]
+// Uses the most species-rich checklists available (see richestFirst).
 // Returns species ranked by how often they appear on complete eBird
 // checklists in the county (eBird subnational2 region) around the point.
 // Without `month`: the most recent checklists. With `month`: checklists from
@@ -56,12 +57,23 @@ export function interleave(feeds, max) {
   return out;
 }
 
+// Most species first (user's choice: a more complete list). The checklist
+// feed already reports numSpecies, so this costs no extra requests. Stable
+// sort keeps feed order (newest first) among equal counts.
+export const richestFirst = (lists) => [...lists].sort((a, b) => (b.numSpecies ?? 0) - (a.numSpecies ?? 0));
+
+// Returns { lists, pool }: the checklists to read and how many were considered.
 async function sampleChecklists(region, month) {
   const usable = (c) => (c.numSpecies ?? 1) > 0;
-  if (!month) return (await ebird(`/product/lists/${region}?maxResults=200`)).filter(usable).slice(0, MAX_CHECKLISTS);
+  if (!month) {
+    const feed = (await ebird(`/product/lists/${region}?maxResults=200`)).filter(usable);
+    return { lists: richestFirst(feed).slice(0, MAX_CHECKLISTS), pool: feed.length };
+  }
   const dates = monthDates(month);
-  const feeds = await pool(dates, 2, ({ y, m, d }) => ebird(`/product/lists/${region}/${y}/${m}/${d}?maxResults=50`));
-  return interleave(feeds.map((f) => (Array.isArray(f) ? f.filter(usable) : [])), MAX_CHECKLISTS);
+  const feeds = (await pool(dates, 2, ({ y, m, d }) => ebird(`/product/lists/${region}/${y}/${m}/${d}?maxResults=100`)))
+    .map((f) => (Array.isArray(f) ? f.filter(usable) : []));
+  // Richest from each date, taken round-robin, so one huge count day can't dominate.
+  return { lists: interleave(feeds.map(richestFirst), MAX_CHECKLISTS), pool: feeds.reduce((n, f) => n + f.length, 0) };
 }
 
 export async function rankSpecies(lat, lng, dist, month = 0) {
@@ -76,7 +88,7 @@ export async function rankSpecies(lat, lng, dist, month = 0) {
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.result;
 
   // 2. Recent checklists submitted in that region.
-  const recent = await sampleChecklists(region, month);
+  const { lists: recent, pool: considered } = await sampleChecklists(region, month);
   if (!recent.length) {
     throw new ApiError(404, month
       ? `No eBird checklists from ${MONTHS[month - 1]} found for this area. Try "Recent sightings".`
@@ -133,7 +145,7 @@ export async function rankSpecies(lat, lng, dist, month = 0) {
     source: "eBird",
     region: { code: region, name: regionName },
     period: month ? { month, label: MONTHS[month - 1] } : { month: 0, label: "recent" },
-    sample: { checklists: used.length, completeOnly: used === complete, from: dates[0] || null, to: dates.at(-1) || null },
+    sample: { checklists: used.length, considered, richest: true, completeOnly: used === complete, from: dates[0] || null, to: dates.at(-1) || null },
     species,
   };
   cache.set(cacheKey, { at: Date.now(), result });
