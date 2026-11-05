@@ -1,6 +1,8 @@
 // Flashcard study screen: photo → hints → answer → "did you know it?".
 
 import { $, el, api, load, save, shuffle, mediaUrl, soundsUrl, hintsUrl, periodText } from "./lib.js";
+
+let where = null; // trip place + season for photos (set per session)
 import { grade, sessionOrder, requeue, hintsFor, lookalikes } from "./learn.js";
 
 const PROGRESS_KEY = "bf-progress";
@@ -10,12 +12,18 @@ const sounds = new Map(); // code -> Promise<sounds>
 export const getProgress = () => load(PROGRESS_KEY, {});
 
 function mediaFor(sp) {
-  if (!media.has(sp.code)) {
-    const p = api(mediaUrl(sp))
-      .catch(() => ({ photos: [], summary: null }));
-    media.set(sp.code, p);
-  }
-  return media.get(sp.code);
+  const url = mediaUrl(sp, where);
+  if (!media.has(url)) media.set(url, api(url).catch(() => ({ photos: [], summary: null })));
+  return media.get(url);
+}
+
+// "© Name … · iNaturalist", plus where and when a local photo was taken.
+function photoCredit(ph) {
+  return [
+    ph.page ? el("a", { href: ph.page, target: "_blank", rel: "noopener" }, ph.attribution) : ph.attribution,
+    " · iNaturalist",
+    ph.local && ph.context ? el("span", { class: "photo-where" }, ` · Taken ${ph.context}`) : null,
+  ];
 }
 
 const extras = new Map(); // code -> Promise<size/field-mark/habitat hints>
@@ -71,7 +79,8 @@ function player(rec, { autoplay = false } = {}) {
 
 let s = null; // session state
 
-export function startSession({ deck, all, placeName, month = 0, onExit }) {
+export function startSession({ deck, all, placeName, month = 0, photoWhere = null, onExit }) {
+  where = photoWhere;
   s = { deck, all, placeName, month, onExit, queue: sessionOrder(deck, getProgress()), done: 0, firstTry: new Map(), card: null };
   $("#study-exit").onclick = () => { stopAudio(); onExit(); };
   showCard();
@@ -120,10 +129,7 @@ function renderPhoto(photo, loading) {
   const img = el("img", { src: photo.url, alt: "Photo of the bird to identify", decoding: "async" });
   img.onerror = () => renderPhoto(null, false);
   frame.replaceChildren(img);
-  credit.replaceChildren(
-    photo.page ? el("a", { href: photo.page, target: "_blank", rel: "noopener" }, photo.attribution) : photo.attribution,
-    " · iNaturalist",
-  );
+  credit.replaceChildren(...photoCredit(photo).filter(Boolean));
 }
 
 function renderActions() {
@@ -185,8 +191,7 @@ function bringIntoView(node) {
 function showExtraPhoto(c) {
   const ph = pickPhoto(c.sp, c.media, 1);
   if (!ph) return;
-  const credit = el("figcaption", { class: "credit" },
-    ph.page ? el("a", { href: ph.page, target: "_blank", rel: "noopener" }, ph.attribution) : ph.attribution, " · iNaturalist");
+  const credit = el("figcaption", { class: "credit" }, ...photoCredit(ph));
   const img = el("img", { src: ph.url, alt: "Another photo of the same bird", decoding: "async" });
   const fig = el("figure", { class: "photo hint-photo" }, el("div", { class: "photo-frame" }, img), credit);
   img.onerror = () => fig.replaceChildren(el("p", { class: "photo-note" }, "This photo isn't available offline."));

@@ -1,6 +1,6 @@
 // Bird Flashcards — place search → ranked species list → flashcards.
 
-import { $, el, api, load, save, speciesUrl, MONTHS, periodText, coord, hasCoords } from "./lib.js";
+import { $, el, api, load, save, speciesUrl, MONTHS, periodText, coord, hasCoords, photoContextFor } from "./lib.js";
 import { LEARNED_BOX } from "./learn.js";
 import { startSession, getProgress } from "./study.js";
 import { SOUND_CHOICES, deckId, getDeck, listDecks, downloadDeck, removeDeck, estimateBytes, formatBytes } from "./decks.js";
@@ -244,6 +244,7 @@ async function startDownload() {
   try {
     const meta = await downloadDeck({
       place, month, data, species, top: state.top, soundsPerBird: off.sounds, signal: off.controller.signal,
+      photoWhere: photoContextFor(place, month, data),
       onProgress: (done, total, bytes) => { Object.assign(off, { done, total, bytes }); if (state.place && deckId(state.place) === id) renderOffline(); },
     });
     Object.assign(off, { mode: "idle", note: meta.missing.length ? "" : "Ready. This trip now works with no signal.", error: false });
@@ -277,6 +278,7 @@ $("#study-start").addEventListener("click", () => {
   show("study");
   startSession({
     deck: visible(), all: state.data.species, placeName: state.place.name, month: state.month,
+    photoWhere: photoContextFor(state.place, state.month, state.data),
     onExit: () => { show("list"); renderSpecies(); },
   });
 });

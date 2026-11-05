@@ -89,7 +89,7 @@ async function storeRecording(cache, rec, signal) {
  * `data` is the full species response for the place.
  * onProgress(done, total, bytes) is called after each bird.
  */
-export async function downloadDeck({ place, month = 0, data, species, top, soundsPerBird, onProgress, signal }) {
+export async function downloadDeck({ place, month = 0, data, species, top, soundsPerBird, photoWhere = null, onProgress, signal }) {
   const id = deckId(place);
   const cache = await caches.open(cacheName(id));
   try { await navigator.storage?.persist?.(); } catch { /* best effort */ }
@@ -105,13 +105,13 @@ export async function downloadDeck({ place, month = 0, data, species, top, sound
         const sp = species[next++];
         if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
         try {
-          const m = await getJSON(mediaUrl(sp), signal);
+          const m = await getJSON(mediaUrl(sp, photoWhere), signal);
           const kept = [];
           for (const ph of (m.photos || []).slice(0, PHOTOS_PER_BIRD)) {
             try { bytes += await storePhoto(cache, ph.url, signal); kept.push(ph); }
             catch (e) { if (signal?.aborted || e instanceof DeckError) throw e; }
           }
-          await put(cache, mediaUrl(sp), jsonResponse({ ...m, photos: kept }));
+          await put(cache, mediaUrl(sp, photoWhere), jsonResponse({ ...m, photos: kept }));
           if (!kept.length) missing.push(sp.comName);
           // Size / field-mark / habitat hints: small JSON; saved only once they exist.
           try {

@@ -114,7 +114,7 @@ export async function mockGeocode(q) {
 }
 
 // Placeholder "photo" (inline SVG) so the study screen can be tried offline.
-export function mockMedia(sci, name) {
+export function mockMedia(sci, name, where = {}) {
   const hue = [...(sci || name)].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
   const photo = (n, light) => ({
     url: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 375"><rect width="500" height="375" fill="hsl(${hue} 35% ${light}%)"/><text x="250" y="200" font-family="sans-serif" font-size="26" fill="#fff" text-anchor="middle">Sample photo ${n} (mock mode)</text></svg>`),
@@ -122,7 +122,9 @@ export function mockMedia(sci, name) {
   });
   return {
     taxonId: null, inatUrl: null,
-    photos: [photo(1, 55), photo(2, 40)],
+    photos: [photo(1, 55), photo(2, 40)].map((p, i) => (Number.isFinite(where.lat) && i === 0
+      ? { ...p, local: true, context: `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][((where.month || 10) - 1)]} 2025 · Sample place near the trip` }
+      : p)),
     summary: `${name || sci} is a sample species shown in mock mode. With real data this paragraph comes from Wikipedia via iNaturalist.`,
     wikipediaUrl: null,
   };

@@ -146,6 +146,7 @@ main { padding-block: 24px 8px; }
 .photo-note { color: var(--muted); padding: 16px; margin: 0; }
 .credit { color: var(--muted); font-size: .75rem; line-height: 1.35; min-height: 1em; overflow-wrap: anywhere; }
 .credit a { color: inherit; }
+.photo-where { color: var(--accent); }
 
 .hints { display: flex; flex-direction: column; gap: 6px; }
 .hints:empty { display: none; }

@@ -149,6 +149,20 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
   but in random order. Progress is in localStorage (`bf-progress`);
   move to IndexedDB with the trip-deck work.
 - Photos rotate between reviews so you learn the bird, not one picture.
+- **Local, in-season photos first** (user's request: right subspecies and
+  plumage). `/api/media` takes optional `lat`, `lng`, `month`; `inat.js`
+  searches iNaturalist *observations* of the taxon (research grade, allowed
+  licenses, `order_by=votes`) within 100 km, widening to 400 then 1,500 km
+  until 4 photos, restricted to the trip month ±1 (`seasonWindow`). Local
+  photos come first, then the taxon's general photos fill up to 6. Captions
+  add "Taken May 2024 · Boone, NC" (`photoContext`).
+  - The context comes from `photoContextFor(place, month, data)`: the trip
+    month, or for "recent sightings" the month of the newest checklist in the
+    saved species data, so a saved trip's photo URLs match exactly offline.
+    URLs round lat/lng to 1 decimal so nearby places share cache entries.
+  - `inat()` retries 429 with backoff (1 s, 2 s); iNaturalist asks for about
+    1 request/second. Each new species costs up to 5 iNat calls (search,
+    taxon, up to 3 observation searches); results are CDN-cached 7 days.
 
 ## Roadmap
 1. ✅ Place → ranked species list (eBird, serverless, cached)
