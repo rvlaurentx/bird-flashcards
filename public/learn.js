@@ -78,3 +78,32 @@ export function lookalikes(sp, all, n = 3) {
   others.forEach(add);
   return picked;
 }
+
+// ---------- points (user's request: reward using fewer hints) ----------
+// Up to 10 points per bird; each hint costs what it gives away.
+export const MAX_POINTS = 10;
+export const HINT_COST = { photo: 1, sound: 2, family: 2, size: 1, marks: 2, habitat: 1, choices: 3 };
+export const STREAK_AT = 3;     // clean answers in a row before the bonus starts
+export const STREAK_BONUS = 2;  // extra points per clean answer while on a streak
+
+export const hintCost = (kind) => HINT_COST[kind] ?? 1;
+
+// Highest possible session score: every bird named with no hints, so the
+// streak bonus applies from the STREAK_AT-th bird on.
+export const maxScore = (birds) => birds * MAX_POINTS + Math.max(0, birds - STREAK_AT + 1) * STREAK_BONUS;
+
+/**
+ * Score one answer. Only a bird's first attempt in a session scores; a
+ * missed bird that comes back is practice (0 points, streak unchanged).
+ * Returns { points, base, bonus, streak, clean, practice }.
+ */
+export function scoreAnswer({ knewIt, hintKinds = [], firstAttempt = true, streak = 0 }) {
+  if (!firstAttempt) return { points: 0, base: 0, bonus: 0, streak, clean: false, practice: true };
+  if (!knewIt) return { points: 0, base: 0, bonus: 0, streak: 0, clean: false, practice: false };
+  const spent = hintKinds.reduce((sum, k) => sum + hintCost(k), 0);
+  const base = Math.max(1, MAX_POINTS - spent);
+  const clean = hintKinds.length === 0;
+  const newStreak = clean ? streak + 1 : 0;
+  const bonus = clean && newStreak >= STREAK_AT ? STREAK_BONUS : 0;
+  return { points: base + bonus, base, bonus, streak: newStreak, clean, practice: false };
+}

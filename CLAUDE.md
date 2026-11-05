@@ -148,6 +148,17 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
   (user's request), then stable-sort by box, so weaker birds still come first
   but in random order. Progress is in localStorage (`bf-progress`);
   move to IndexedDB with the trip-deck work.
+- **Points** (user's request: reward using fewer hints; `scoreAnswer()` in
+  `learn.js`): up to 10 per bird; hint costs `HINT_COST` = another photo 1,
+  song 2, family 2, size 1, field marks 2, habitat 1, choices 3; correct with
+  hints scores at least 1; a miss 0. Streak bonus +2 per clean answer from
+  the 3rd in a row (`STREAK_AT`). Only a bird's first attempt in a session
+  scores; repeats after a miss are "Practice round" (0, streak kept). Hint
+  buttons show their cost ("Hint: family (−2)"); the answer card shows
+  "+8 points · 1 hint"; the counter shows "3 of 25 done · 32 pts"; the end
+  screen shows the score out of `maxScore()` (includes streak bonuses), best
+  streak, and best per trip (localStorage `bf-best-scores`, key
+  place|month|list size). Points are separate from the Leitner boxes.
 - Photos rotate between reviews so you learn the bird, not one picture.
 - **Local, in-season photos first** (user's request: right subspecies and
   plumage). `/api/media` takes optional `lat`, `lng`, `month`; `inat.js`

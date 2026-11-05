@@ -3,7 +3,9 @@
 import { $, el, fill, api, load, save, shuffle, mediaUrl, soundsUrl, hintsUrl, periodText } from "./lib.js";
 
 let where = null; // trip place + season for photos (set per session)
-import { grade, sessionOrder, requeue, hintsFor, lookalikes } from "./learn.js";
+import { grade, sessionOrder, requeue, hintsFor, lookalikes, scoreAnswer, hintCost, maxScore } from "./learn.js";
+
+const BEST_KEY = "bf-best-scores"; // best session score per trip (place + month + list size)
 
 const PROGRESS_KEY = "bf-progress";
 const media = new Map(); // code -> Promise<media>
@@ -81,7 +83,10 @@ let s = null; // session state
 
 export function startSession({ deck, all, placeName, month = 0, photoWhere = null, onExit }) {
   where = photoWhere;
-  s = { deck, all, placeName, month, onExit, queue: sessionOrder(deck, getProgress()), done: 0, firstTry: new Map(), card: null };
+  s = {
+    deck, all, placeName, month, photoWhere, onExit, queue: sessionOrder(deck, getProgress()), done: 0, firstTry: new Map(), card: null,
+    score: 0, streak: 0, bestStreak: 0,
+  };
   $("#study-exit").onclick = () => { stopAudio(); onExit(); };
   showCard();
 }
@@ -92,12 +97,12 @@ async function showCard() {
   s.queue = rest;
   stopAudio();
   setRevealed(false);
-  s.card = { sp: card, hintsUsed: 0, answered: false };
+  s.card = { sp: card, hintsUsed: 0, hintKinds: [], answered: false };
   prefetch(rest[0]);
 
   const total = s.deck.length;
   const firstDone = s.firstTry.size;
-  $("#study-count").textContent = `${firstDone} of ${total} done`;
+  updateCounter();
   $("#study-meter").style.width = `${(firstDone / total) * 100}%`;
 
   $("#hints").replaceChildren();
@@ -139,7 +144,8 @@ function renderActions() {
     const next = hints[c.hintsUsed];
     const loading = !c.media; // wait for photos so the hint list is final
     actions.replaceChildren(
-      el("button", { type: "button", class: "btn ghost", disabled: loading || !next, onclick: showHint }, loading ? "Hint" : next ? `Hint: ${next.label.toLowerCase()}` : "No more hints"),
+      el("button", { type: "button", class: "btn ghost", disabled: loading || !next, onclick: showHint },
+        loading ? "Hint" : next ? `Hint: ${next.label.toLowerCase()} (−${hintCost(next.kind)})` : "No more hints"),
       el("button", { type: "button", class: "btn primary", onclick: () => reveal() }, "Show answer"),
     );
   } else if (c.result === undefined) {
@@ -157,6 +163,7 @@ function showHint() {
   const c = s.card, hint = cardHints(c)[c.hintsUsed];
   if (!hint) return;
   c.hintsUsed++;
+  c.hintKinds.push(hint.kind);
   let node;
   if (hint.kind === "choices") node = showChoices();
   else if (hint.kind === "photo") node = showExtraPhoto(c);
@@ -287,13 +294,36 @@ async function reveal(chosen) {
     m.wikipediaUrl ? el("a", { href: m.wikipediaUrl, target: "_blank", rel: "noopener" }, "Wikipedia") : "");
 }
 
+function updateCounter() {
+  $("#study-count").textContent = `${s.firstTry.size} of ${s.deck.length} done · ${s.score} pts`;
+}
+
+// "+8 points · 1 hint" (or a streak / no-hints note) at the top of the answer.
+function showPoints(r, hintsUsed) {
+  let label, note;
+  if (r.practice) { label = "Practice round"; note = "no points on a second try"; }
+  else if (!r.points) { label = "0 points"; note = "it'll come back in a few cards"; }
+  else {
+    label = `+${r.points} points`;
+    note = r.clean ? (r.bonus ? `no hints · ${r.streak} in a row, +${r.bonus} streak bonus` : "no hints!") : `${hintsUsed} hint${hintsUsed === 1 ? "" : "s"}`;
+  }
+  const badge = el("p", { class: `points ${r.points ? (r.clean ? "clean" : "some") : "none"}` }, el("strong", {}, label), ` · ${note}`);
+  $("#answer").prepend(badge);
+}
+
 function record(knewIt) {
   const c = s.card;
   if (c.result !== undefined) return;
   c.result = knewIt;
+  const r = scoreAnswer({ knewIt, hintKinds: c.hintKinds, firstAttempt: !s.firstTry.has(c.sp.code), streak: s.streak });
+  s.score += r.points;
+  s.streak = r.streak;
+  s.bestStreak = Math.max(s.bestStreak, s.streak);
+  showPoints(r, c.hintsUsed);
   save(PROGRESS_KEY, grade(getProgress(), c.sp.code, { knewIt, hintsUsed: c.hintsUsed }));
   if (!s.firstTry.has(c.sp.code)) s.firstTry.set(c.sp.code, knewIt && c.hintsUsed === 0);
   if (!knewIt) s.queue = requeue(s.queue, c.sp);
+  updateCounter();
   renderActions();
 }
 
@@ -303,11 +333,20 @@ function finish() {
   const total = s.deck.length;
   const clean = [...s.firstTry.values()].filter(Boolean).length;
   const missed = s.deck.filter((sp) => s.firstTry.get(sp.code) === false || s.firstTry.get(sp.code) === undefined);
-  $("#study-count").textContent = `${total} of ${total} done`;
+  updateCounter();
   $("#study-meter").style.width = "100%";
-  $("#photo-frame").replaceChildren(el("div", { class: "done" },
-    el("p", { class: "done-big" }, `${clean} of ${total}`),
-    el("p", {}, "named on sight with no hints."),
+  // Best score for this trip (same place, month and list size).
+  const key = `${s.placeName}|${s.month}|${total}`;
+  const bests = load(BEST_KEY, {});
+  const prev = bests[key]?.score;
+  const isBest = prev === undefined || s.score > prev;
+  if (isBest) save(BEST_KEY, { ...bests, [key]: { score: s.score, at: Date.now() } });
+  fill($("#photo-frame"), el("div", { class: "done" },
+    el("p", { class: "done-big" }, `${s.score} points`),
+    el("p", {}, `out of ${maxScore(total)} possible`),
+    prev !== undefined && isBest ? el("p", { class: "new-best" }, `New best! Previous: ${prev}`) : null,
+    prev !== undefined && !isBest ? el("p", { class: "done-note" }, `Your best for this trip: ${prev}`) : null,
+    el("p", { class: "done-note" }, `${clean} of ${total} named with no hints · best streak ${s.bestStreak}`),
   ));
   $("#photo-credit").textContent = "";
   $("#hints").replaceChildren();

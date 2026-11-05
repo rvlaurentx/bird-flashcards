@@ -65,3 +65,35 @@ test("photos: only open licenses, medium size, attribution kept", () => {
   assert.match(p.attribution, /A B/);
   assert.equal(stripHtml("<p>The <b>Downy</b>&nbsp;Woodpecker</p>"), "The Downy Woodpecker");
 });
+
+test("points: 10 with no hints, hint costs subtract, floor of 1, misses 0", async () => {
+  const { scoreAnswer, HINT_COST } = await import("../public/learn.js");
+  assert.equal(scoreAnswer({ knewIt: true }).points, 10);
+  assert.equal(scoreAnswer({ knewIt: true, hintKinds: ["photo"] }).points, 9);
+  assert.equal(scoreAnswer({ knewIt: true, hintKinds: ["sound", "family"] }).points, 6);
+  assert.equal(scoreAnswer({ knewIt: true, hintKinds: Object.keys(HINT_COST) }).points, 1, "all hints still earn 1");
+  assert.equal(scoreAnswer({ knewIt: false, hintKinds: [] }).points, 0);
+});
+
+test("points: streak bonus from the 3rd clean answer; hints or a miss reset it", async () => {
+  const { scoreAnswer } = await import("../public/learn.js");
+  let streak = 0; const pts = [];
+  for (const kinds of [[], [], [], [], ["family"], []]) {
+    const r = scoreAnswer({ knewIt: true, hintKinds: kinds, streak });
+    streak = r.streak; pts.push(r.points);
+  }
+  assert.deepEqual(pts, [10, 10, 12, 12, 8, 10]);
+  assert.equal(scoreAnswer({ knewIt: false, streak: 5 }).streak, 0);
+});
+
+test("points: a repeat after a miss is practice (0 points, streak kept)", async () => {
+  const { scoreAnswer } = await import("../public/learn.js");
+  const r = scoreAnswer({ knewIt: true, firstAttempt: false, streak: 2 });
+  assert.deepEqual([r.points, r.streak, r.practice], [0, 2, true]);
+});
+
+test("max score includes streak bonuses", async () => {
+  const { maxScore } = await import("../public/learn.js");
+  assert.equal(maxScore(25), 25 * 10 + 23 * 2);
+  assert.equal(maxScore(2), 20);
+});

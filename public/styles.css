@@ -202,4 +202,15 @@ main { padding-block: 24px 8px; }
 
 .done { display: grid; gap: 4px; padding: 16px; }
 .done p { margin: 0; }
+.points { margin: 0; font: 500 .9rem/1.3 var(--font-display); color: var(--muted); }
+.points strong { font-size: 1.05rem; }
+.points.clean strong { color: var(--right); }
+.points.some strong { color: var(--accent); }
+.points.none strong { color: var(--wrong); }
+@media (prefers-reduced-motion: no-preference) {
+  .points { animation: pop .35s ease-out; }
+  @keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+}
+.new-best { font: 700 1.05rem/1.3 var(--font-display); color: var(--right); }
+.done-note { color: var(--muted); }
 .done-big { font: 700 2.6rem/1 var(--font-display); }
