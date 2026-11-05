@@ -38,10 +38,10 @@ test("names are hidden in hint text", () => {
   assert.equal(h.habitat, "Gardens and woodland edges.");
 });
 
-test("hint order: photo, song, family, size, field marks, habitat, choices", () => {
+test("hint order: photo, song, size, habitat, family, field marks, choices", () => {
   const sp = { code: "norcar", family: "Cardinals" };
   const extra = { size: "21 cm", fieldMarks: ["a", "b"], habitat: "Gardens." };
-  assert.deepEqual(hintsFor(sp, 2, 1, extra).map((h) => h.kind), ["photo", "sound", "family", "size", "marks", "habitat", "choices"]);
+  assert.deepEqual(hintsFor(sp, 2, 1, extra).map((h) => h.kind), ["photo", "sound", "size", "habitat", "family", "marks", "choices"]);
   assert.deepEqual(hintsFor(sp, 2, 1, null).map((h) => h.kind), ["photo", "sound", "family", "choices"]);
   assert.equal(hintsUrl({ sciName: "Cardinalis cardinalis", comName: "Northern Cardinal" }), "/api/hints?sci=Cardinalis%20cardinalis&name=Northern%20Cardinal");
 });

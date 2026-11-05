@@ -121,10 +121,10 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
   key field mark → habitat/behavior → song/call → reveal. Fewer hints used =
   stronger recall credit.
   - *Implemented today:* photo → **another photo** of the same species →
-    **song or call** (autoplays, xeno-canto) → family → **size** → **field
-    marks** → **habitat** → multiple choice (look-alikes) → reveal. The user
-    moved song before family; size/marks/habitat were placed after family
-    (tell the user if this changes). Each hint only appears when its data
+    **song or call** (autoplays, xeno-canto) → **size** → **habitat** →
+    family → **field marks** → multiple choice (look-alikes) → reveal. Both
+    moves were the user's: song before family, then size and habitat before
+    family. Each hint only appears when its data
     exists. The answer side also lists size, field marks and habitat.
   - Answer side lists all picked recordings (song/call) with credits.
   - When size/field-mark/habitat hints are missing, the answer card says why

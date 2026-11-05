@@ -9,7 +9,7 @@
 //   with no signal and doesn't wait on a weak one. Deck caches survive app
 //   updates; only the user removes them.
 
-const VERSION = "v19";
+const VERSION = "v20";
 const SHELL = `shell-${VERSION}`;
 const DATA = "data-v1";      // API responses; kept across app updates
 const FONTS = "fonts-v1";
