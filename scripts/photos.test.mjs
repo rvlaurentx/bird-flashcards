@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { seasonWindow, photoContext, speciesMedia, RADII } from "../api/_lib/inat.js";
+import { seasonWindow, photoContext, speciesMedia, RADII, EXCLUDE_TERM_VALUES } from "../api/_lib/inat.js";
 import { mediaUrl, photoContextFor } from "../public/lib.js";
 
 test("season window wraps around the year", () => {
@@ -25,7 +25,8 @@ test("photo URL carries trip place and season; stable for saved trips", () => {
   assert.equal(mediaUrl(sp, photoContextFor(place, 0, { sample: { to: "2026-10-25" } })), "/api/media?sci=Cardinalis%20cardinalis&name=Northern%20Cardinal&lat=36.2&lng=-81.7&month=10");
 });
 
-test("local in-season photos come first; search widens until enough", async () => {
+test("local in-season photos come first; search widens for more candidates", async () => {
+  delete process.env.ANTHROPIC_API_KEY; // no photo check in this test
   const real = globalThis.fetch;
   const calls = [];
   const obs = (id, date, place) => ({ id, observed_on: date, place_guess: place, photos: [{ id: id * 10, license_code: "cc-by-nc", url: `https://static.inaturalist.org/photos/${id}/square.jpg`, attribution: `(c) Obs ${id}, some rights reserved (CC BY-NC)` }] });
@@ -46,7 +47,9 @@ test("local in-season photos come first; search widens until enough", async () =
   try {
     const m = await speciesMedia("Cardinalis cardinalis", "Northern Cardinal", { lat: 36.2, lng: -81.7, month: 5 });
     const obsCalls = calls.filter((u) => u.pathname === "/v1/observations");
-    assert.deepEqual(obsCalls.map((u) => Number(u.searchParams.get("radius"))), RADII.slice(0, 2), "stopped widening once 4 local photos found");
+    assert.deepEqual(obsCalls.map((u) => Number(u.searchParams.get("radius"))), RADII, "widened while short of candidates");
+    assert.equal(obsCalls[0].searchParams.get("captive"), "false");
+    assert.equal(obsCalls[0].searchParams.get("without_term_value_id"), EXCLUDE_TERM_VALUES.join(","));
     assert.equal(obsCalls[0].searchParams.get("month"), "4,5,6");
     assert.equal(obsCalls[0].searchParams.get("quality_grade"), "research");
     assert.match(obsCalls[0].searchParams.get("photo_license"), /cc-by-nc/);
@@ -60,4 +63,33 @@ test("local in-season photos come first; search widens until enough", async () =
     assert.ok(!calls.some((u) => u.pathname === "/v1/observations"));
     assert.equal(g.photos.length, 1);
   } finally { globalThis.fetch = real; }
+});
+
+test("photo check keeps only photos where a bird is clearly visible", async () => {
+  process.env.ANTHROPIC_API_KEY = "test-key";
+  const { keepClearPhotos } = await import("../api/_lib/photocheck.js?check");
+  const real = globalThis.fetch;
+  let sent = null;
+  globalThis.fetch = async (input, init = {}) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (!url.includes("api.anthropic.com")) throw new Error("unexpected " + url);
+    sent = JSON.parse(typeof input === "string" ? init.body : await input.text());
+    return new Response(JSON.stringify({
+      id: "msg_t", type: "message", role: "assistant", model: "claude-haiku-5-5", stop_reason: "end_turn", stop_sequence: null,
+      content: [{ type: "text", text: JSON.stringify({ bird_clearly_visible: [true, false, true] }) }],
+      usage: { input_tokens: 900, output_tokens: 20 },
+    }), { headers: { "content-type": "application/json", "request-id": "req_t" } });
+  };
+  try {
+    const photos = [1, 2, 3].map((i) => ({ url: `https://static.inaturalist.org/photos/${i}/medium.jpg` }));
+    const kept = await keepClearPhotos(photos);
+    assert.deepEqual(kept.map((p) => p.url), [photos[0].url, photos[2].url]);
+    assert.equal(sent.model, "claude-haiku-5-5");
+    assert.equal(sent.messages[0].content.filter((b) => b.type === "image").length, 3);
+    assert.equal(sent.messages[0].content.find((b) => b.type === "image").source.type, "url");
+    // Fails open: a broken answer keeps every photo
+    globalThis.fetch = async () => new Response("oops", { status: 500 });
+    const { keepClearPhotos: again } = await import("../api/_lib/photocheck.js?failopen");
+    assert.equal((await again(photos)).length, 3);
+  } finally { globalThis.fetch = real; delete process.env.ANTHROPIC_API_KEY; }
 });

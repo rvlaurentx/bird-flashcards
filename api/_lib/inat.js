@@ -3,6 +3,7 @@
 // attribution string, which the app must display.
 
 import { ApiError } from "./ebird.js";
+import { keepClearPhotos } from "./photocheck.js";
 
 const INAT = "https://api.inaturalist.org/v1";
 const UA = "BirdFlashcards/0.1 (https://github.com/rvlaurentx/bird-flashcards)";
@@ -64,7 +65,14 @@ const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep
 const LICENSE_PARAM = [...ALLOWED_LICENSES].join(",");
 // Search areas, tried in order until there are enough photos (km).
 export const RADII = [100, 400, 1500];
-const LOCAL_WANTED = 4;
+const LOCAL_WANTED = 4;      // local photos to keep
+const LOCAL_CANDIDATES = 10; // gathered before the photo check
+
+// iNaturalist annotations to exclude: Evidence of Presence = feather (23),
+// scat (25), track (26), bone (27), molt (28), egg (30), construction/nest
+// (35); Alive or Dead = dead (19). Unannotated observations still pass, which
+// is why the photo check below also runs.
+export const EXCLUDE_TERM_VALUES = [19, 23, 25, 26, 27, 28, 30, 35];
 
 // The trip month and the months either side (wrapping around the year).
 export function seasonWindow(month) {
@@ -93,13 +101,15 @@ async function localPhotos(taxonId, { lat, lng, month }) {
   const found = [];
   for (const radius of RADII) {
     const q = `/observations?taxon_id=${taxonId}&lat=${lat}&lng=${lng}&radius=${radius}` +
-      `${months.length ? `&month=${months.join(",")}` : ""}&photos=true&quality_grade=research` +
+      `${months.length ? `&month=${months.join(",")}` : ""}&photos=true&quality_grade=research&captive=false` +
+      `&without_term_value_id=${EXCLUDE_TERM_VALUES.join(",")}` +
       `&photo_license=${LICENSE_PARAM}&order_by=votes&per_page=12`;
     const { results = [] } = await inat(q);
     for (const p of observationPhotos(results)) if (!found.some((f) => f.url === p.url)) found.push(p);
-    if (found.length >= LOCAL_WANTED) break;
+    if (found.length >= LOCAL_CANDIDATES) break;
   }
-  return found;
+  // Keep only photos where a bird is clearly visible (see photocheck.js).
+  return (await keepClearPhotos(found.slice(0, LOCAL_CANDIDATES))).slice(0, LOCAL_WANTED);
 }
 
 /**

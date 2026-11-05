@@ -160,6 +160,15 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
     month, or for "recent sightings" the month of the newest checklist in the
     saved species data, so a saved trip's photo URLs match exactly offline.
     URLs round lat/lng to 1 decimal so nearby places share cache entries.
+  - **No-bird photos** (user report: some local photos showed no bird).
+    Observation searches add `captive=false` and
+    `without_term_value_id=` dead/feather/scat/track/bone/molt/egg/nest
+    annotations (`EXCLUDE_TERM_VALUES`); then up to 10 candidates go to
+    `photocheck.js`, one Claude Haiku 5.5 request per species with the
+    images by URL, which returns true/false per photo ("live bird clearly
+    visible"). Up to 4 that pass are kept. Fails open (no key or error →
+    photos kept). Cost ≈ $0.0003 per species. General taxon photos are
+    hand-curated on iNaturalist and aren't checked.
   - `inat()` retries 429 with backoff (1 s, 2 s); iNaturalist asks for about
     1 request/second. Each new species costs up to 5 iNat calls (search,
     taxon, up to 3 observation searches); results are CDN-cached 7 days.
