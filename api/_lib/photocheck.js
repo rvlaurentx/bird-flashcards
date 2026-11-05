@@ -4,8 +4,10 @@
 // speck, a feather or a nest.
 // One request per species (all candidates together). The server downloads
 // the photos itself and sends them inline, so the check doesn't depend on
-// Anthropic reaching iNaturalist. Fails open: if the key is missing or the
-// call fails, every photo is kept, and the reason is reported.
+// Anthropic reaching iNaturalist.
+// Without a key, photos are kept unchecked. With a key, a failed check
+// keeps NONE of them ("fail closed"): an unchecked track or habitat photo is
+// worse than falling back to iNaturalist's hand-picked species photos.
 
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
@@ -46,7 +48,7 @@ export async function keepClearPhotos(photos) {
   const loaded = (await Promise.all(photos.map(async (p) => {
     try { return { p, source: await inlineImage(p.url) }; } catch { return null; }
   }))).filter(Boolean);
-  if (!loaded.length) return { photos, check: { ran: false, reason: "could not download photos" } };
+  if (!loaded.length) return { photos: [], check: { ran: false, reason: "could not download photos" } };
 
   const content = [];
   loaded.forEach(({ source }, i) => {
@@ -64,12 +66,12 @@ export async function keepClearPhotos(photos) {
     });
     const verdicts = res.parsed_output?.bird_is_clear_subject;
     if (res.stop_reason === "refusal" || !Array.isArray(verdicts) || verdicts.length !== loaded.length) {
-      return { photos, check: { ran: false, reason: "unusable answer" } };
+      return { photos: [], check: { ran: false, reason: "unusable answer" } };
     }
     const kept = loaded.filter((_, i) => verdicts[i]).map(({ p }) => p);
     return { photos: kept, check: { ran: true, of: loaded.length, kept: kept.length } };
   } catch (e) {
-    console.error("photo check failed; keeping photos", e?.status ?? e?.message);
-    return { photos, check: { ran: false, reason: `check failed (${e?.status ?? e?.message ?? "error"})` } };
+    console.error("photo check failed; using general photos", e?.status ?? e?.message);
+    return { photos: [], check: { ran: false, reason: `check failed (${e?.status ?? e?.message ?? "error"})` } };
   }
 }

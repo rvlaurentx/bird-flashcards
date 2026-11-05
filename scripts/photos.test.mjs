@@ -91,7 +91,7 @@ test("photo check keeps only photos where a bird is clearly visible", async () =
     assert.equal(imgs.length, 3);
     assert.equal(imgs[0].source.type, "base64", "photos are sent inline, not fetched by Anthropic");
     assert.equal(imgs[0].source.media_type, "image/jpeg");
-    // Fails open: a broken answer keeps every photo
+    // Fails closed: with a key, a failed check drops the unchecked photos
     globalThis.fetch = async (input) => {
       const url = typeof input === "string" ? input : input.url;
       return url.includes("static.inaturalist.org")
@@ -100,7 +100,7 @@ test("photo check keeps only photos where a bird is clearly visible", async () =
     };
     const { keepClearPhotos: again } = await import("../api/_lib/photocheck.js?failopen");
     const r = await again(photos);
-    assert.equal(r.photos.length, 3);
+    assert.equal(r.photos.length, 0, "a failed check keeps no unchecked local photos");
     assert.equal(r.check.ran, false);
     assert.match(r.check.reason, /check failed \(400\)/);
   } finally { globalThis.fetch = real; delete process.env.ANTHROPIC_API_KEY; }

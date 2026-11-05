@@ -168,8 +168,10 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
     downloads the photos and sends them **inline (base64)**, so the check
     doesn't depend on Anthropic reaching iNaturalist. Strict prompt: the
     bird must be the clear subject ("if you have to search for it, false";
-    when unsure, false). Up to 4 that pass are kept. Fails open (no key or
-    error → photos kept). `/api/media` reports `localPhotos` and
+    when unsure, false). Up to 4 that pass are kept. **Fails closed** when
+    the key is set: if the check can't run, local photos are dropped and the
+    taxon's hand-picked photos are used (user saw a track photo slip
+    through). Without a key, local photos are kept unchecked. `/api/media` reports `localPhotos` and
     `photoCheck` ({ran, of, kept} or {ran:false, reason}) for diagnosis. Cost ≈ $0.0003 per species. General taxon photos are
     hand-curated on iNaturalist and aren't checked.
   - `inat()` retries 429 with backoff (1 s, 2 s); iNaturalist asks for about
