@@ -6,7 +6,7 @@
 // photo and audio files. The service worker answers from deck caches first.
 // Deck metadata (name, size, date) is small and lives in localStorage.
 
-import { load, save, speciesUrl, mediaUrl, soundsUrl, audioUrl } from "./lib.js";
+import { load, save, speciesUrl, mediaUrl, soundsUrl, hintsUrl, audioUrl } from "./lib.js";
 
 const DECKS_KEY = "bf-decks";
 const PHOTOS_PER_BIRD = 2;           // main photo + "another photo" hint
@@ -113,6 +113,11 @@ export async function downloadDeck({ place, month = 0, data, species, top, sound
           }
           await put(cache, mediaUrl(sp), jsonResponse({ ...m, photos: kept }));
           if (!kept.length) missing.push(sp.comName);
+          // Size / field-mark / habitat hints: small JSON; saved only once they exist.
+          try {
+            const hx = await getJSON(hintsUrl(sp), signal);
+            if (hx.available) await put(cache, hintsUrl(sp), jsonResponse(hx));
+          } catch (e) { if (signal?.aborted || e instanceof DeckError) throw e; }
           if (soundsPerBird > 0) {
             const snd = await getJSON(soundsUrl(sp), signal);
             const keptRecs = [];

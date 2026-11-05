@@ -40,6 +40,11 @@ export default async function handler(req, res) {
   }
   out.xenoCanto.verdict = !xcKey ? "No XENO_CANTO_API_KEY in this deployment (sounds disabled)." : out.xenoCanto.ok ? "xeno-canto key works." : "xeno-canto did not accept the request; see status/message.";
 
+  // Claude (size / field-mark / habitat hints). Presence only; no paid call.
+  const { getAnthropicKey, HINTS_MODEL } = await import("./_lib/hints.js");
+  const ak = getAnthropicKey();
+  out.hints = { model: HINTS_MODEL, keyPresent: !!ak, verdict: ak ? "Anthropic key is set; hints are on." : "No ANTHROPIC_API_KEY (size, field-mark and habitat hints are off)." };
+
   out.verdict =
     !out.key.present ? "No EBIRD_API_KEY in this deployment. Check the variable name and that it's enabled for this environment, then redeploy." :
     !out.ebird?.ok && (out.ebird?.status === 401 || out.ebird?.status === 403) ? "eBird rejected this key. Copy it again from https://ebird.org/api/keygen and replace the value." :

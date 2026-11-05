@@ -1,6 +1,6 @@
 // Flashcard study screen: photo → hints → answer → "did you know it?".
 
-import { $, el, api, load, save, shuffle, mediaUrl, soundsUrl, periodText } from "./lib.js";
+import { $, el, api, load, save, shuffle, mediaUrl, soundsUrl, hintsUrl, periodText } from "./lib.js";
 import { grade, sessionOrder, requeue, hintsFor, lookalikes } from "./learn.js";
 
 const PROGRESS_KEY = "bf-progress";
@@ -18,6 +18,12 @@ function mediaFor(sp) {
   return media.get(sp.code);
 }
 
+const extras = new Map(); // code -> Promise<size/field-mark/habitat hints>
+function extraFor(sp) {
+  if (!extras.has(sp.code)) extras.set(sp.code, api(hintsUrl(sp)).catch(() => ({ available: false })));
+  return extras.get(sp.code);
+}
+
 function soundsFor(sp) {
   if (!sounds.has(sp.code)) {
     const p = api(soundsUrl(sp))
@@ -31,6 +37,7 @@ function soundsFor(sp) {
 function prefetch(sp) {
   if (!sp) return;
   soundsFor(sp);
+  extraFor(sp);
   mediaFor(sp).then((m) => { [0, 1].forEach((o) => { const ph = pickPhoto(sp, m, o); if (ph) new Image().src = ph.url; }); });
 }
 
@@ -41,7 +48,7 @@ function pickPhoto(sp, m, offset = 0) {
   return m.photos[(seen + offset) % m.photos.length];
 }
 
-const cardHints = (c) => hintsFor(c.sp, c.media?.photos?.length || 0, c.sounds?.recordings?.length || 0);
+const cardHints = (c) => hintsFor(c.sp, c.media?.photos?.length || 0, c.sounds?.recordings?.length || 0, c.extra?.available ? c.extra : null);
 
 const stopAudio = () => document.querySelectorAll("#view-study audio").forEach((a) => a.pause());
 
@@ -92,10 +99,11 @@ async function showCard() {
   renderPhoto(null, true);
   renderActions();
 
-  const [m, snd] = await Promise.all([mediaFor(card), soundsFor(card)]);
+  const [m, snd, extra] = await Promise.all([mediaFor(card), soundsFor(card), extraFor(card)]);
   if (s.card?.sp !== card) return; // moved on meanwhile
   s.card.media = m;
   s.card.sounds = snd;
+  s.card.extra = extra;
   renderPhoto(pickPhoto(card, m), false);
   renderActions(); // available hints depend on photos and sounds
 }
@@ -147,7 +155,12 @@ function showHint() {
   if (hint.kind === "choices") node = showChoices();
   else if (hint.kind === "photo") node = showExtraPhoto(c);
   else if (hint.kind === "sound") node = showSoundHint(c);
-  else $("#hints").append(node = el("div", { class: "hint" }, el("span", { class: "hint-label" }, hint.label), el("span", {}, hint.text)));
+  else {
+    const body = Array.isArray(hint.text)
+      ? el("ul", { class: "hint-list" }, ...hint.text.map((t) => el("li", {}, t)))
+      : el("span", {}, hint.text);
+    $("#hints").append(node = el("div", { class: "hint" }, el("span", { class: "hint-label" }, hint.label), body));
+  }
   renderActions();
   bringIntoView(node);
 }
@@ -221,6 +234,19 @@ function setRevealed(on) {
   }
 }
 
+// Size, field marks and habitat on the answer side (when available).
+function answerFacts(x) {
+  if (!x?.available || !(x.size || x.fieldMarks?.length || x.habitat)) return null;
+  const row = (label, body) => el("div", { class: "fact" }, el("span", { class: "hint-label" }, label), body);
+  return el("div", { class: "facts" },
+    x.size ? row("Size", el("span", {}, x.size)) : null,
+    x.fieldMarks?.length ? row("Field marks", el("ul", { class: "hint-list" }, ...x.fieldMarks.map((t) => el("li", {}, t)))) : null,
+    x.habitat ? row("Habitat", el("span", {}, x.habitat)) : null,
+    x.source ? el("p", { class: "credit" }, "Condensed by Claude from ",
+      el("a", { href: x.source.url, target: "_blank", rel: "noopener" }, `Wikipedia: ${x.source.title}`), ` (${x.source.license})`) : null,
+  );
+}
+
 async function reveal(chosen) {
   const c = s.card;
   if (c.answered) return;
@@ -237,6 +263,7 @@ async function reveal(chosen) {
     el("h2", { class: "ans-name" }, sp.comName),
     el("p", { class: "ans-sci" }, el("i", {}, sp.sciName), sp.family ? ` · ${sp.family}` : ""),
     el("p", { class: "ans-freq" }, `Seen on ${pct}% of ${periodText(s.month)} around ${s.placeName}.`),
+    answerFacts(c.extra),
     el("p", { class: "ans-summary" }),
     el("p", { class: "ans-links" },
       // Macaulay Library media can't be shown in-app without a license

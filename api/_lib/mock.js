@@ -152,3 +152,16 @@ export function mockSounds(sci, name) {
   });
   return { recordings: [rec("song", 1, f), rec("call", 2, f * 1.5)] };
 }
+
+// Sample size / field-mark / habitat hints for mock mode.
+export function mockHints(sci, name) {
+  const n = [...(sci || name)].reduce((a, c) => a + c.charCodeAt(0), 0);
+  const cm = 12 + (n % 30);
+  return {
+    available: true,
+    size: `${cm}–${cm + 2} cm (about ${((cm + 1) / 2.54).toFixed(1)} in), sample size comparison`,
+    fieldMarks: ["Sample field mark one (mock mode)", "Sample field mark two", "Sample field mark three"],
+    habitat: "Sample habitat: woodland edges and gardens (mock mode).",
+    source: { title: name || sci, url: "https://en.wikipedia.org", license: "CC BY-SA 4.0" },
+  };
+}

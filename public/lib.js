@@ -44,4 +44,5 @@ export const MONTHS = ["January", "February", "March", "April", "May", "June", "
 export const periodText = (month) => (month ? `${MONTHS[month - 1]} checklists` : "recent checklists");
 export const mediaUrl = (sp) => `/api/media?sci=${encodeURIComponent(sp.sciName)}&name=${encodeURIComponent(sp.comName)}`;
 export const soundsUrl = (sp) => `/api/sounds?sci=${encodeURIComponent(sp.sciName)}&name=${encodeURIComponent(sp.comName)}`;
+export const hintsUrl = (sp) => `/api/hints?sci=${encodeURIComponent(sp.sciName)}&name=${encodeURIComponent(sp.comName)}`;
 export const audioUrl = (recId) => `/api/audio?id=${String(recId).replace(/\D/g, "")}`;

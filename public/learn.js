@@ -36,13 +36,19 @@ export function requeue(queue, card, gap = 3) {
 // ---------- hints ----------
 // Agreed progression (CLAUDE.md): photo → family → size → field mark →
 // habitat → song → reveal. Size, field mark, habitat and song need data we
-// don't have yet, so today's steps are another photo → song/call → family →
-// look-alike choices (user moved song before family). No scientific names.
-export function hintsFor(sp, photoCount = 0, soundCount = 0) {
+// came later (Wikipedia via Claude, /api/hints). Today: another photo →
+// song/call → family → size → field marks → habitat → look-alike choices
+// (user moved song before family). No scientific names.
+// `extra` = size / field-mark / habitat hints from /api/hints, when available.
+// Order: photo → song → family → size → field marks → habitat → choices.
+export function hintsFor(sp, photoCount = 0, soundCount = 0, extra = null) {
   const hints = [];
   if (photoCount > 1) hints.push({ kind: "photo", label: "Another photo", text: "" });
   if (soundCount > 0) hints.push({ kind: "sound", label: "Song or call", text: "" });
   if (sp.family) hints.push({ kind: "family", label: "Family", text: sp.family });
+  if (extra?.size) hints.push({ kind: "size", label: "Size", text: extra.size });
+  if (extra?.fieldMarks?.length) hints.push({ kind: "marks", label: "Field marks", text: extra.fieldMarks });
+  if (extra?.habitat) hints.push({ kind: "habitat", label: "Habitat", text: extra.habitat });
   hints.push({ kind: "choices", label: "Choices", text: "" });
   return hints;
 }

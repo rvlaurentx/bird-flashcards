@@ -15,8 +15,8 @@ the starter template.
   (built-in sample data). Tests: `npm test` (mock data).
 
 ## Hard rules
-- **API keys never reach GitHub or the browser.** `EBIRD_API_KEY` and
-  `XENO_CANTO_API_KEY` are Vercel environment variables. The browser only calls our `/api/*` functions.
+- **API keys never reach GitHub or the browser.** `EBIRD_API_KEY`,
+  `XENO_CANTO_API_KEY` and `ANTHROPIC_API_KEY` are Vercel environment variables. The browser only calls our `/api/*` functions.
   `.env` is git-ignored; `.env.example` documents the variables.
 - **Offline trip decks are a core requirement, not an add-on.** Birders often
   have no signal. Every feature must answer: "what happens with no network?"
@@ -29,6 +29,8 @@ the starter template.
 | Likely species for a place | eBird API 2.0 | In use: `api/species.js` |
 | Bird sounds | Xeno-canto API v3 | In use: `api/sounds.js`, `api/_lib/xc.js`. Key in `XENO_CANTO_API_KEY` (server only; sent as `key=` query param). Query `gen:X sp:y q:A`, then any quality, then `en:"Common Name"`. Picks ≤2 songs + ≤2 calls, ≤90 s, best quality first. Every recording shows XC number, recordist and its CC license (some are NC/ND; playing unmodified is fine while non-commercial). |
 | Photos + short description | iNaturalist API (taxon photos; `wikipedia_summary`) | In use: `api/media.js`, `api/_lib/inat.js`. Only CC0/CC-BY/CC-BY-SA/CC-BY-NC/CC-BY-NC-SA photos (`ALLOWED_LICENSES`); NC is allowed only while the app is non-commercial. The attribution string is shown under every photo. Taxon matched by scientific name, then common name (eBird and iNat names sometimes differ). |
+| Size / field marks / habitat hints | English Wikipedia article (CC BY-SA 4.0), condensed by **Claude Haiku 5.5** (`claude-haiku-5-5`, user's choice) | In use: `api/hints.js`, `api/_lib/hints.js`. Wikipedia `action=query&prop=extracts` (by scientific name, then common name); keeps intro + description/identification/habitat-type sections (≤9,000 chars). `client.messages.parse` + `zodOutputFormat` (structured output), `effort: "low"`. Code then hides the bird's name (`redact`) and builds the size line with a familiar-bird comparison (`sizeText`, never the bird itself). Without `ANTHROPIC_API_KEY` returns `{available:false}` (not cached) and the hints are skipped. Results CDN-cached 30 days and saved in trip decks. Credit shown on the answer side. Cost ≈ $0.0004 per species. |
+| Merlin / All About Birds / Birds of the World text | Cornell Lab | **Not used.** Copyrighted; Cornell's terms forbid reuse without written permission. eBird species page (linked) shows Merlin's ID text. |
 | Photos/audio (alt) | Macaulay Library | **Not used in-app.** No public API; Cornell treats all apps as commercial use needing a license (per-item requests via the Help Desk). Don't scrape. The answer side links out to the eBird species page ("More photos and sounds on eBird"), which shows ML media under Cornell's terms. Revisit if a license is obtained (e.g. via High Country Audubon). |
 
 Re-check current key requirements and license terms for each source before any
@@ -119,11 +121,11 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
   key field mark → habitat/behavior → song/call → reveal. Fewer hints used =
   stronger recall credit.
   - *Implemented today:* photo → **another photo** of the same species →
-    **song or call** (autoplays, xeno-canto) → family → multiple choice
-    (look-alikes) → reveal. The user moved song before family. Each hint
-    only appears when its data exists. Size, field marks and habitat need a
-    data source we don't have yet; slot them into `hintsFor()` after family
-    when added (confirm placement with the user).
+    **song or call** (autoplays, xeno-canto) → family → **size** → **field
+    marks** → **habitat** → multiple choice (look-alikes) → reveal. The user
+    moved song before family; size/marks/habitat were placed after family
+    (tell the user if this changes). Each hint only appears when its data
+    exists. The answer side also lists size, field marks and habitat.
   - Answer side lists all picked recordings (song/call) with credits.
   - **Each new hint scrolls into view** (user's request) via `bringIntoView()`
     in `study.js`: fully between the sticky header and the sticky button bar
@@ -154,12 +156,13 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
 3. ✅ Photos (iNaturalist, licensed + attributed) — pulled forward; cards need them
 4. ✅ Audio (Xeno-canto) — song/call hint + recordings on the answer side
 5. ✅ Offline trip decks (download, manage, study with no signal)
-6. Hint data for size / field marks / habitat (source to be decided)
+6. ✅ Hint data for size / field marks / habitat (Wikipedia + Claude Haiku 5.5)
 7. ✅ Month-of-trip frequencies
 8. Optional: Play Store wrapper
 
 ## Conventions
 - Vanilla HTML/CSS/ES modules, no framework or bundler (keep it simple until
-  there's a reason not to). Node ≥ 18 for functions.
+  there's a reason not to). Node ≥ 18 for functions. Server dependencies:
+  `@anthropic-ai/sdk`, `zod` (hints only); the browser code has none.
 - Mobile-first: test at ~390 px width; tap targets ≥ 44 px; support dark mode.
 - Keep `api/_lib/mock.js` shapes in sync with the real eBird responses used.

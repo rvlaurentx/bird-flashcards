@@ -9,5 +9,11 @@
     "dev:mock": "EBIRD_MOCK=1 node scripts/dev-server.mjs",
     "test": "EBIRD_MOCK=1 node --test scripts/*.test.mjs"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.5.0",
+    "zod": "^4.6.7"
+  }
 }
