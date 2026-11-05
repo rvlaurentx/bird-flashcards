@@ -72,24 +72,36 @@ test("photo check keeps only photos where a bird is clearly visible", async () =
   let sent = null;
   globalThis.fetch = async (input, init = {}) => {
     const url = typeof input === "string" ? input : input.url;
+    if (url.includes("static.inaturalist.org")) return new Response(new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]), { headers: { "content-type": "image/jpeg" } });
     if (!url.includes("api.anthropic.com")) throw new Error("unexpected " + url);
     sent = JSON.parse(typeof input === "string" ? init.body : await input.text());
     return new Response(JSON.stringify({
       id: "msg_t", type: "message", role: "assistant", model: "claude-haiku-5-5", stop_reason: "end_turn", stop_sequence: null,
-      content: [{ type: "text", text: JSON.stringify({ bird_clearly_visible: [true, false, true] }) }],
+      content: [{ type: "text", text: JSON.stringify({ bird_is_clear_subject: [true, false, true] }) }],
       usage: { input_tokens: 900, output_tokens: 20 },
     }), { headers: { "content-type": "application/json", "request-id": "req_t" } });
   };
   try {
     const photos = [1, 2, 3].map((i) => ({ url: `https://static.inaturalist.org/photos/${i}/medium.jpg` }));
-    const kept = await keepClearPhotos(photos);
+    const { photos: kept, check } = await keepClearPhotos(photos);
     assert.deepEqual(kept.map((p) => p.url), [photos[0].url, photos[2].url]);
+    assert.deepEqual(check, { ran: true, of: 3, kept: 2 });
     assert.equal(sent.model, "claude-haiku-5-5");
-    assert.equal(sent.messages[0].content.filter((b) => b.type === "image").length, 3);
-    assert.equal(sent.messages[0].content.find((b) => b.type === "image").source.type, "url");
+    const imgs = sent.messages[0].content.filter((b) => b.type === "image");
+    assert.equal(imgs.length, 3);
+    assert.equal(imgs[0].source.type, "base64", "photos are sent inline, not fetched by Anthropic");
+    assert.equal(imgs[0].source.media_type, "image/jpeg");
     // Fails open: a broken answer keeps every photo
-    globalThis.fetch = async () => new Response("oops", { status: 500 });
+    globalThis.fetch = async (input) => {
+      const url = typeof input === "string" ? input : input.url;
+      return url.includes("static.inaturalist.org")
+        ? new Response(new Uint8Array([0xff, 0xd8]), { headers: { "content-type": "image/jpeg" } })
+        : new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "bad" } }), { status: 400, headers: { "content-type": "application/json" } });
+    };
     const { keepClearPhotos: again } = await import("../api/_lib/photocheck.js?failopen");
-    assert.equal((await again(photos)).length, 3);
+    const r = await again(photos);
+    assert.equal(r.photos.length, 3);
+    assert.equal(r.check.ran, false);
+    assert.match(r.check.reason, /check failed \(400\)/);
   } finally { globalThis.fetch = real; delete process.env.ANTHROPIC_API_KEY; }
 });

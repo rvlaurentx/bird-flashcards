@@ -95,8 +95,9 @@ export function observationPhotos(observations) {
   }).filter(Boolean);
 }
 
+// Returns { photos, check } (check = photo-check report, for /api/media).
 async function localPhotos(taxonId, { lat, lng, month }) {
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { photos: [], check: { ran: false, reason: "no location" } };
   const months = seasonWindow(month);
   const found = [];
   for (const radius of RADII) {
@@ -108,8 +109,9 @@ async function localPhotos(taxonId, { lat, lng, month }) {
     for (const p of observationPhotos(results)) if (!found.some((f) => f.url === p.url)) found.push(p);
     if (found.length >= LOCAL_CANDIDATES) break;
   }
-  // Keep only photos where a bird is clearly visible (see photocheck.js).
-  return (await keepClearPhotos(found.slice(0, LOCAL_CANDIDATES))).slice(0, LOCAL_WANTED);
+  // Keep only photos where a bird is clearly the subject (see photocheck.js).
+  const { photos, check } = await keepClearPhotos(found.slice(0, LOCAL_CANDIDATES));
+  return { photos: photos.slice(0, LOCAL_WANTED), check };
 }
 
 /**
@@ -122,12 +124,12 @@ export async function speciesMedia(sciName, comName, where = {}) {
   if (!taxon) return { taxonId: null, photos: [], summary: null };
   const [{ results = [] }, local] = await Promise.all([
     inat(`/taxa/${taxon.id}`),
-    localPhotos(taxon.id, where).catch(() => []),
+    localPhotos(taxon.id, where).catch((e) => ({ photos: [], check: { ran: false, reason: `local search failed (${e.message})` } })),
   ]);
   const full = results[0] || taxon;
   const seen = new Set();
   const general = [full.default_photo, ...(full.taxon_photos || []).map((tp) => tp.photo)].map(toPhoto);
-  const photos = [...local, ...general]
+  const photos = [...local.photos, ...general]
     .filter((p) => p && !seen.has(p.url) && seen.add(p.url)).slice(0, MAX_PHOTOS);
   return {
     taxonId: taxon.id,
@@ -135,5 +137,8 @@ export async function speciesMedia(sciName, comName, where = {}) {
     photos,
     summary: stripHtml(full.wikipedia_summary) || null,
     wikipediaUrl: full.wikipedia_url || null,
+    // Diagnostics: how many local photos were found and what the check did.
+    localPhotos: local.photos.length,
+    photoCheck: local.check,
   };
 }

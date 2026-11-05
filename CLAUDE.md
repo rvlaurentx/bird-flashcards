@@ -164,10 +164,13 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
     Observation searches add `captive=false` and
     `without_term_value_id=` dead/feather/scat/track/bone/molt/egg/nest
     annotations (`EXCLUDE_TERM_VALUES`); then up to 10 candidates go to
-    `photocheck.js`, one Claude Haiku 5.5 request per species with the
-    images by URL, which returns true/false per photo ("live bird clearly
-    visible"). Up to 4 that pass are kept. Fails open (no key or error →
-    photos kept). Cost ≈ $0.0003 per species. General taxon photos are
+    `photocheck.js`, one Claude Haiku 5.5 request per species. The server
+    downloads the photos and sends them **inline (base64)**, so the check
+    doesn't depend on Anthropic reaching iNaturalist. Strict prompt: the
+    bird must be the clear subject ("if you have to search for it, false";
+    when unsure, false). Up to 4 that pass are kept. Fails open (no key or
+    error → photos kept). `/api/media` reports `localPhotos` and
+    `photoCheck` ({ran, of, kept} or {ran:false, reason}) for diagnosis. Cost ≈ $0.0003 per species. General taxon photos are
     hand-curated on iNaturalist and aren't checked.
   - `inat()` retries 429 with backoff (1 s, 2 s); iNaturalist asks for about
     1 request/second. Each new species costs up to 5 iNat calls (search,
