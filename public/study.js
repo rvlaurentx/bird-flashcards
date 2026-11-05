@@ -1,6 +1,6 @@
 // Flashcard study screen: photo → hints → answer → "did you know it?".
 
-import { $, el, api, load, save, shuffle, mediaUrl, soundsUrl, hintsUrl, periodText } from "./lib.js";
+import { $, el, fill, api, load, save, shuffle, mediaUrl, soundsUrl, hintsUrl, periodText } from "./lib.js";
 
 let where = null; // trip place + season for photos (set per session)
 import { grade, sessionOrder, requeue, hintsFor, lookalikes } from "./learn.js";
@@ -129,7 +129,7 @@ function renderPhoto(photo, loading) {
   const img = el("img", { src: photo.url, alt: "Photo of the bird to identify", decoding: "async" });
   img.onerror = () => renderPhoto(null, false);
   frame.replaceChildren(img);
-  credit.replaceChildren(...photoCredit(photo).filter(Boolean));
+  fill(credit, photoCredit(photo));
 }
 
 function renderActions() {
@@ -261,7 +261,7 @@ async function reveal(chosen) {
   const ans = $("#answer");
   ans.hidden = false;
   setRevealed(true);
-  ans.replaceChildren(
+  fill(ans,
     chosen ? (chosen.code === sp.code
       ? el("p", { class: "ans-result right" }, "✓ Correct")
       : el("p", { class: "ans-result wrong" }, `✗ You chose ${chosen.comName}`)) : null,

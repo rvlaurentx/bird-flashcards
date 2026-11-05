@@ -13,6 +13,13 @@ export function el(tag, attrs = {}, ...children) {
   return n;
 }
 
+// Replace a node's content, skipping empty parts (null/undefined/false).
+// The DOM's own replaceChildren(null) would print the word "null".
+export function fill(node, ...parts) {
+  node.replaceChildren(...parts.flat().filter((c) => c != null && c !== false));
+  return node;
+}
+
 export async function api(path) {
   const res = await fetch(path);
   let body = null;
