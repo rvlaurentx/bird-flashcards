@@ -24,9 +24,14 @@ test("Wikipedia sections: keeps intro, description and habitat; skips the rest",
   assert.doesNotMatch(text, /taxonomy text/);
 });
 
-test("size text compares with a familiar bird, never the bird itself", () => {
-  assert.equal(sizeText(21, 23, "Northern Cardinal"), "21–23 cm (about 8.7 in), a little smaller than an American Robin");
-  assert.match(sizeText(25, 25, "American Robin"), /cardinal/);
+test("size text brackets between two familiar birds, never the bird's own kind", () => {
+  assert.equal(sizeText(12, 15, "Swamp Sparrow", 15, 20), "12–15 cm (about 5.3 in), 15–20 g: bigger than a chickadee, smaller than a Dark-eyed Junco");
+  assert.equal(sizeText(11.5, 12, "Carolina Chickadee", 9, 12), "11.5–12 cm (about 4.6 in), 9–12 g: bigger than a kinglet, smaller than a Dark-eyed Junco");
+  assert.match(sizeText(15, 17, "Song Sparrow"), /bigger than a Dark-eyed Junco, smaller than an Eastern Bluebird$/, "no House Sparrow for a sparrow");
+  assert.match(sizeText(29, 31, "Rock Pigeon"), /about the size of a Mourning Dove$/);
+  assert.match(sizeText(140, 150, "Sandhill Crane"), /bigger than a Great Blue Heron$/);
+  assert.match(sizeText(7, 8, "Calliope Hummingbird"), /smaller than a kinglet$/);
+  assert.doesNotMatch(sizeText(12, 15, "Swamp Sparrow"), / g:/, "weight only when known");
   assert.equal(sizeText(null, null), null);
 });
 
@@ -65,7 +70,7 @@ test("full pipeline: Wikipedia → Claude Haiku 5.5 (structured output) → hint
     }
     if (url.includes("api.anthropic.com")) {
       sent = JSON.parse(typeof input === "string" ? init.body : await input.text());
-      const json = { length_cm_min: 21, length_cm_max: 23, field_marks: ["Male bright red with black face mask", "Tall crest; thick red cone-shaped bill"], habitat: "Woodland edges, hedgerows and gardens" };
+      const json = { length_cm_min: 21, length_cm_max: 23, mass_g_min: 42, mass_g_max: 48, field_marks: ["Male bright red with black face mask", "Tall crest; thick red cone-shaped bill"], habitat: "Woodland edges, hedgerows and gardens" };
       return new Response(JSON.stringify({
         id: "msg_test", type: "message", role: "assistant", model: HINTS_MODEL, stop_reason: "end_turn", stop_sequence: null,
         content: [{ type: "text", text: JSON.stringify(json) }],
@@ -81,7 +86,7 @@ test("full pipeline: Wikipedia → Claude Haiku 5.5 (structured output) → hint
     assert.equal(sent.output_config.format.type, "json_schema");
     assert.match(sent.messages[0].content, /21–23 cm/);
     assert.equal(r.available, true);
-    assert.equal(r.size, "21–23 cm (about 8.7 in), a little smaller than an American Robin");
+    assert.equal(r.size, "21–23 cm (about 8.7 in), 42–48 g: bigger than an Eastern Bluebird, smaller than an American Robin");
     assert.deepEqual(r.fieldMarks, ["Male bright red with black face mask", "Tall crest; thick red cone-shaped bill"]);
     assert.equal(r.habitat, "Woodland edges, hedgerows and gardens.");
     assert.equal(r.source.license, "CC BY-SA 4.0");

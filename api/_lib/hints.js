@@ -57,27 +57,47 @@ export async function wikiArticle(sciName, comName) {
 }
 
 // ---------- size comparison ----------
-// Familiar reference birds (typical length in cm).
-const REFS = [
-  ["a hummingbird", 9], ["a chickadee", 13], ["a House Sparrow", 16], ["a cardinal", 22],
-  ["an American Robin", 25], ["a Mourning Dove", 30], ["an American Crow", 45],
-  ["a Mallard", 58], ["a Canada Goose", 95], ["a Great Blue Heron", 115],
+// Familiar reference birds with typical field-guide length (cm) and weight
+// (g). Spaced closely at the small end, where birders most need it
+// (a chickadee is much smaller than a sparrow).
+export const REFS = [
+  ["a Ruby-throated Hummingbird", 9, 3], ["a kinglet", 10, 6], ["a chickadee", 12, 10],
+  ["a Dark-eyed Junco", 15, 20], ["a House Sparrow", 16, 28], ["an Eastern Bluebird", 18, 31],
+  ["a Northern Cardinal", 22, 45], ["an American Robin", 25, 77], ["a Blue Jay", 28, 85],
+  ["a Mourning Dove", 30, 120], ["an American Crow", 45, 450], ["a Mallard", 58, 1100],
+  ["a Canada Goose", 95, 4000], ["a Great Blue Heron", 115, 2400],
 ];
 
-// `exclude`: the bird's own name, so it is never compared with itself.
-export function sizeText(min, max, exclude = "") {
+// A reference shares a distinctive word with the bird's own name
+// (e.g. "chickadee" for Carolina Chickadee): never compare a bird with its kind.
+function sameKind(refName, exclude) {
+  const ex = String(exclude).toLowerCase();
+  return refName.toLowerCase().replace(/^an? /, "").split(/[\s-]+/).some((w) => w.length > 4 && ex.includes(w));
+}
+
+// One decimal for small values (11.5 cm), whole numbers above 20.
+const fmt = (n) => (n < 20 ? n.toFixed(1).replace(/\.0$/, "") : String(Math.round(n)));
+const range = (lo, hi, unit) => (fmt(hi) !== fmt(lo) ? `${fmt(lo)}–${fmt(hi)} ${unit}` : `${fmt(lo)} ${unit}`);
+
+// "12–15 cm (about 5.3 in), 15–20 g: bigger than a chickadee, smaller than a Dark-eyed Junco"
+// `exclude`: the bird's own name. Weight is optional.
+export function sizeText(min, max, exclude = "", massMin = null, massMax = null) {
   const lo = Number(min), hi = Number(max ?? min);
   if (!Number.isFinite(lo) || lo <= 0) return null;
   const top = Number.isFinite(hi) && hi > lo ? hi : lo;
   const mid = (lo + top) / 2;
-  const cm = top > lo ? `${Math.round(lo)}–${Math.round(top)} cm` : `${Math.round(lo)} cm`;
   const inches = (mid / 2.54).toFixed(mid < 25 ? 1 : 0);
-  const ex = String(exclude).toLowerCase();
-  const refs = REFS.filter(([n]) => !ex.includes(n.replace(/^an? /i, "").toLowerCase()) && !n.toLowerCase().split(" ").slice(1).some((w) => w.length > 4 && ex.includes(w)));
-  const [name, ref] = refs.reduce((best, r) => (Math.abs(Math.log(r[1] / mid)) < Math.abs(Math.log(best[1] / mid)) ? r : best));
-  const ratio = mid / ref;
-  const comparison = ratio < 0.8 ? `smaller than ${name}` : ratio < 0.93 ? `a little smaller than ${name}` : ratio <= 1.08 ? `about the size of ${name}` : ratio <= 1.25 ? `a little larger than ${name}` : `larger than ${name}`;
-  return `${cm} (about ${inches} in), ${comparison}`;
+  const gLo = Number(massMin), gHi = Number(massMax ?? massMin);
+  const grams = Number.isFinite(gLo) && gLo > 0 ? `, ${range(gLo, Number.isFinite(gHi) && gHi > gLo ? gHi : gLo, "g")}` : "";
+
+  const refs = REFS.filter(([n]) => !sameKind(n, exclude));
+  const close = refs.find(([, cm]) => Math.abs(mid - cm) / cm <= 0.05);
+  const below = refs.filter(([, cm]) => cm < mid).at(-1);
+  const above = refs.find(([, cm]) => cm > mid);
+  const comparison = close ? `about the size of ${close[0]}`
+    : below && above ? `bigger than ${below[0]}, smaller than ${above[0]}`
+    : below ? `bigger than ${below[0]}` : `smaller than ${above[0]}`;
+  return `${range(lo, top, "cm")} (about ${inches} in)${grams}: ${comparison}`;
 }
 
 // ---------- hiding the name ----------
@@ -98,6 +118,8 @@ export function redact(text, comName, sciName) {
 const HintsSchema = z.object({
   length_cm_min: z.number().nullable(),
   length_cm_max: z.number().nullable(),
+  mass_g_min: z.number().nullable(),
+  mass_g_max: z.number().nullable(),
   field_marks: z.array(z.string()),
   habitat: z.string().nullable(),
 });
@@ -105,6 +127,7 @@ const HintsSchema = z.object({
 const SYSTEM = `You write identification hints for a bird flashcard app. The learner sees a photo and tries to name the bird; each hint should help without giving the answer away.
 Use only facts stated in the provided Wikipedia text.
 - length_cm_min / length_cm_max: the adult body length in centimetres as stated (convert inches if needed). Use the same number twice for a single value. Use null if no length is given (do not use wingspan or weight).
+- mass_g_min / mass_g_max: the adult weight in grams as stated (convert ounces or kilograms). Same number twice for a single value; null if not given.
 - field_marks: 2 or 3 short phrases (each under 15 words) naming the most useful visual features for identifying the adult in the field: colours, patterns, bill, shape, and how males and females differ if notable.
 - habitat: one short sentence (under 20 words) on where it is usually found, or null.
 Never write the bird's common name, scientific name, genus or any part of them. Write plain phrases, not full sentences, for field marks.`;
@@ -137,7 +160,7 @@ export function toHints(out, comName, sciName) {
   if (!out) return { size: null, fieldMarks: [], habitat: null };
   const clean = (s) => redact(String(s || "").trim().replace(/\.$/, ""), comName, sciName);
   return {
-    size: sizeText(out.length_cm_min, out.length_cm_max, comName),
+    size: sizeText(out.length_cm_min, out.length_cm_max, comName, out.mass_g_min, out.mass_g_max),
     fieldMarks: (out.field_marks || []).map(clean).filter(Boolean).slice(0, 3),
     habitat: out.habitat ? clean(out.habitat) + "." : null,
   };
