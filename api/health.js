@@ -43,7 +43,15 @@ export default async function handler(req, res) {
   // Claude (size / field-mark / habitat hints). Presence only; no paid call.
   const { getAnthropicKey, HINTS_MODEL } = await import("./_lib/hints.js");
   const ak = getAnthropicKey();
-  out.hints = { model: HINTS_MODEL, keyPresent: !!ak, verdict: ak ? "Anthropic key is set; hints are on." : "No ANTHROPIC_API_KEY (size, field-mark and habitat hints are off)." };
+  // Describe the key's shape without revealing it.
+  const kind = !ak ? "missing" : ak.startsWith("sk-ant-api") ? "api key" : ak.startsWith("sk-ant-admin") ? "admin key (won't work)" : "unrecognised format";
+  out.hints = {
+    model: HINTS_MODEL, keyPresent: !!ak, keyKind: kind, keyLength: ak.length,
+    hadStrayCharacters: process.env.ANTHROPIC_API_KEY !== undefined && process.env.ANTHROPIC_API_KEY !== ak,
+    verdict: !ak ? "No ANTHROPIC_API_KEY (size, field-mark and habitat hints are off)."
+      : kind !== "api key" ? "ANTHROPIC_API_KEY doesn't look like an API key; create one under API keys in the Anthropic Console (it starts with sk-ant-api)."
+      : "Anthropic key is set. If hints still fail, open /api/hints for a bird to see Anthropic's answer.",
+  };
 
   out.verdict =
     !out.key.present ? "No EBIRD_API_KEY in this deployment. Check the variable name and that it's enabled for this environment, then redeploy." :
