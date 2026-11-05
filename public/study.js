@@ -30,7 +30,8 @@ function photoCredit(ph) {
 
 const extras = new Map(); // code -> Promise<size/field-mark/habitat hints>
 function extraFor(sp) {
-  if (!extras.has(sp.code)) extras.set(sp.code, api(hintsUrl(sp)).catch(() => ({ available: false })));
+  // Keep the reason on failure so the answer card can say why hints are missing.
+  if (!extras.has(sp.code)) extras.set(sp.code, api(hintsUrl(sp)).catch((e) => ({ available: false, error: e.message })));
   return extras.get(sp.code);
 }
 
@@ -248,7 +249,13 @@ function setRevealed(on) {
 
 // Size, field marks and habitat on the answer side (when available).
 function answerFacts(x) {
-  if (!x?.available || !(x.size || x.fieldMarks?.length || x.habitat)) return null;
+  if (!x) return null;
+  // Say why size / field-mark / habitat hints are missing, instead of nothing.
+  const why = x.error ? `couldn't load (${x.error})` : !x.available ? (x.reason || "are switched off") : null;
+  if (why) return el("p", { class: "credit facts-missing" }, `Size, field-mark and habitat hints ${why.replace(/\.$/, "")}.`);
+  if (!(x.size || x.fieldMarks?.length || x.habitat)) {
+    return el("p", { class: "credit facts-missing" }, x.source ? "Wikipedia had no size, field-mark or habitat details for this bird." : "No Wikipedia article found for this bird, so there are no size, field-mark or habitat hints.");
+  }
   const row = (label, body) => el("div", { class: "fact" }, el("span", { class: "hint-label" }, label), body);
   return el("div", { class: "facts" },
     x.size ? row("Size", el("span", {}, x.size)) : null,

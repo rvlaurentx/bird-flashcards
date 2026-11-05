@@ -3,6 +3,15 @@
   "functions": {
     "api/species.js": {
       "maxDuration": 30
+    },
+    "api/hints.js": {
+      "maxDuration": 60
+    },
+    "api/media.js": {
+      "maxDuration": 60
+    },
+    "api/audio.js": {
+      "maxDuration": 30
     }
   },
   "headers": [

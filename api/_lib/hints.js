@@ -144,7 +144,7 @@ export function toHints(out, comName, sciName) {
 }
 
 export async function speciesHints(sciName, comName) {
-  if (!getAnthropicKey()) return { available: false, reason: "ANTHROPIC_API_KEY is not set, so size, field-mark and habitat hints are off." };
+  if (!getAnthropicKey()) return { available: false, reason: "are off because ANTHROPIC_API_KEY is not set" };
   const article = await wikiArticle(sciName, comName);
   if (!article) return { available: true, size: null, fieldMarks: [], habitat: null, source: null };
   const out = await summarize(sourceText(splitSections(article.extract)), comName, sciName);

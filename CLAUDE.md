@@ -127,6 +127,12 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
     (tell the user if this changes). Each hint only appears when its data
     exists. The answer side also lists size, field marks and habitat.
   - Answer side lists all picked recordings (song/call) with credits.
+  - When size/field-mark/habitat hints are missing, the answer card says why
+    (`answerFacts()`): key not set, couldn't load (error message), or no
+    Wikipedia details. (User never saw these hints; failures used to be
+    silent.) `vercel.json` gives `api/hints.js` and `api/media.js` 60 s and
+    `api/audio.js` 30 s, since Wikipedia + Claude and the photo check can
+    exceed short default limits.
   - **Each new hint scrolls into view** (user's request) via `bringIntoView()`
     in `study.js`: fully between the sticky header and the sticky button bar
     (top-aligned if taller). Checked at 360×640 and 390×844.
