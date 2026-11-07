@@ -115,6 +115,16 @@ async function localPhotos(taxonId, { lat, lng, month }) {
   return { photos: photos.slice(0, LOCAL_WANTED), check };
 }
 
+// [a1, b1, a2, b2, ...] then whatever is left of the longer list.
+export function alternate(a, b) {
+  const out = [];
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if (i < a.length) out.push(a[i]);
+    if (i < b.length) out.push(b[i]);
+  }
+  return out;
+}
+
 /**
  * Photos for a species. With `where` ({ lat, lng, month }), photos taken near
  * the place in the trip season come first (local subspecies, seasonal
@@ -130,11 +140,12 @@ export async function speciesMedia(sciName, comName, where = {}) {
   ]);
   const full = results[0] || taxon;
   const seen = new Set();
-  // Order: local in-season iNaturalist photos (checked), then Wikimedia
-  // Commons (article photo + Quality images; freely licensed), then
-  // iNaturalist's general species photos as a last resort.
+  // Order: local in-season iNaturalist photos (checked) alternating with
+  // Wikimedia Commons photos (article photo + Quality images; freely
+  // licensed), so the card photo and the "another photo" hint show one of
+  // each; then iNaturalist's general species photos as a last resort.
   const general = [full.default_photo, ...(full.taxon_photos || []).map((tp) => tp.photo)].map(toPhoto);
-  const photos = [...local.photos, ...commons, ...general]
+  const photos = [...alternate(local.photos, commons), ...general]
     .filter((p) => p && !seen.has(p.url) && seen.add(p.url)).slice(0, MAX_PHOTOS);
   return {
     taxonId: taxon.id,

@@ -172,8 +172,10 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
   searches iNaturalist *observations* of the taxon (research grade, allowed
   licenses, `order_by=votes`) within 100 km, widening to 400 then 1,500 km
   until 4 photos, restricted to the trip month ±1 (`seasonWindow`). Local
-  photos come first, then **Wikimedia Commons** photos (article photo +
-  Quality images), then iNaturalist's general taxon photos as a last resort,
+  photos **alternate** with **Wikimedia Commons** photos (article photo +
+  Quality images; `alternate()`), so the card photo and the "another photo"
+  hint show one of each and saved trips (2 photos per bird) get both; then
+  iNaturalist's general taxon photos as a last resort,
   up to 6 (user agreed: Commons for quality and free licensing, iNaturalist
   for local/seasonal). `/api/media` also reports `commonsPhotos`. `sw.js`
   caches `upload.wikimedia.org` images like iNaturalist's. Captions

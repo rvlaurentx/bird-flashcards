@@ -75,3 +75,10 @@ test("Commons failure never breaks photos", async () => {
   try { assert.deepEqual(await commonsPhotos("Melospiza georgiana", "Swamp Sparrow"), []); }
   finally { globalThis.fetch = real; }
 });
+
+test("local and Commons photos alternate, so card photo and hint photo differ in source", async () => {
+  const { alternate } = await import("../api/_lib/inat.js");
+  assert.deepEqual(alternate(["L1", "L2", "L3"], ["C1"]), ["L1", "C1", "L2", "L3"]);
+  assert.deepEqual(alternate([], ["C1", "C2"]), ["C1", "C2"]);
+  assert.deepEqual(alternate(["L1", "L2"], ["C1", "C2"]), ["L1", "C1", "L2", "C2"]);
+});
