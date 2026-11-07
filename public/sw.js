@@ -9,7 +9,7 @@
 //   with no signal and doesn't wait on a weak one. Deck caches survive app
 //   updates; only the user removes them.
 
-const VERSION = "v23";
+const VERSION = "v24";
 const SHELL = `shell-${VERSION}`;
 const DATA = "data-v1";      // API responses; kept across app updates
 const FONTS = "fonts-v1";
@@ -47,6 +47,7 @@ self.addEventListener("fetch", (e) => {
 // Look in saved trip decks. Audio elements ask for byte ranges, so answer
 // those with a 206 slice of the saved file.
 async function fromDeck(req) {
+  if (req.headers.get("x-bf-fresh")) return null; // trip update: always fetch fresh
   const names = (await caches.keys()).filter((k) => k.startsWith("deck-"));
   for (const name of names) {
     const hit = await (await caches.open(name)).match(req, { ignoreVary: true });

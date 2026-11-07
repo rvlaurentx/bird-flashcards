@@ -112,6 +112,19 @@ public release.
   - Deck metadata (name, birds, bytes, date, sounds choice, birds without
     photos) is in localStorage `bf-decks`; saved trips list on the start
     screen ("✓ Works offline"). Progress stays in localStorage `bf-progress`.
+  - **Saves and updates are safe and fresh** (`downloadDeck({ refresh: true })`):
+    the species list is fetched fresh (first `top` birds), every request
+    carries `x-bf-fresh: 1`, which makes `sw.js` skip deck caches (otherwise
+    an update re-saved old copies from this or another deck, e.g. hints
+    shared across places). Each save writes a new cache
+    `deck-<lat2>,<lng2>@<timestamp>` (name stored as `meta.cache`); the old
+    copy is deleted only after the new one completes, so a failed or
+    cancelled update keeps the previous trip.
+  - **"Update all"** (user's request) on the start screen's "Saved for
+    offline" header: `updateAllDecks()` re-saves each trip in turn with its
+    own month, list size and sound choice; progress + Cancel (panel built
+    once, updated in place so Cancel stays tappable); failures are listed
+    and keep their old copy.
   - Tested end to end in Chromium with mock data: save → offline → reload →
     open saved trip → study with photos, all hints and audio → remove.
 - Bump `VERSION` in `sw.js` when shell files change.

@@ -3,7 +3,7 @@
 import { $, el, fill, api, load, save, speciesUrl, MONTHS, periodText, coord, hasCoords, photoContextFor } from "./lib.js";
 import { LEARNED_BOX } from "./learn.js";
 import { startSession, getProgress } from "./study.js";
-import { SOUND_CHOICES, deckId, getDeck, listDecks, downloadDeck, removeDeck, estimateBytes, formatBytes } from "./decks.js";
+import { SOUND_CHOICES, deckId, getDeck, listDecks, downloadDeck, updateAllDecks, removeDeck, estimateBytes, formatBytes } from "./decks.js";
 
 const RECENT_KEY = "bf-recent-places";
 const MONTH_KEY = "bf-trip-month";
@@ -245,19 +245,57 @@ async function startDownload() {
   renderOffline();
   try {
     const meta = await downloadDeck({
-      place, month, data, species, top: state.top, soundsPerBird: off.sounds, signal: off.controller.signal,
-      photoWhere: photoContextFor(place, month, data),
+      // refresh: fetch the species list and all bird data fresh, not from the saved copy
+      place, month, top: state.top, soundsPerBird: off.sounds, signal: off.controller.signal, refresh: true,
       onProgress: (done, total, bytes) => { Object.assign(off, { done, total, bytes }); if (state.place && deckId(state.place) === id) renderOffline(); },
     });
     Object.assign(off, { mode: "idle", note: meta.missing.length ? "" : "Ready. This trip now works with no signal.", error: false });
   } catch (e) {
     const cancelled = e?.name === "AbortError";
-    Object.assign(off, { mode: "idle", note: cancelled ? "Download cancelled. Nothing was saved." : `Couldn't save this trip: ${e.message}`, error: !cancelled });
+    const kept = getDeck(place) ? " Your previous saved copy is unchanged." : "";
+    Object.assign(off, { mode: "idle", note: (cancelled ? "Download cancelled." : `Couldn't save this trip: ${e.message}.`) + kept, error: !cancelled });
   }
   off.controller = null;
   renderRecent();
-  if (state.place && deckId(state.place) === id) renderOffline();
+  // Show the freshly saved list (served from the new saved copy).
+  if (state.place && deckId(state.place) === id) { if (getDeck(place) && !off.error) loadSpecies(); else renderOffline(); }
 }
+
+// ---------- update all saved trips ----------
+let updatingAll = null; // AbortController while running
+async function runUpdateAll() {
+  const box = $("#update-all-box");
+  if (!navigator.onLine) { box.hidden = false; fill(box, el("p", { class: "off-note error" }, "Connect to the internet to update saved trips.")); return; }
+  updatingAll = new AbortController();
+  $("#update-all").disabled = true;
+  box.hidden = false;
+  // Build the panel once and update it in place, so Cancel stays tappable.
+  const title = el("p", { class: "off-title" }), bar = el("i"), note = el("p", { class: "off-note" });
+  fill(box, title, el("div", { class: "meter" }, bar), note,
+    el("button", { type: "button", class: "btn ghost wide", onclick: () => updatingAll?.abort() }, "Cancel"));
+  const show = (p) => {
+    title.textContent = `Updating ${p.index + 1} of ${p.count}: ${p.name}`;
+    bar.style.width = `${p.total ? Math.round((p.done / p.total) * 100) : 0}%`;
+    note.textContent = p.total ? `${p.done} of ${p.total} birds. Keep the app open.` : "Getting the latest bird list…";
+  };
+  show({ index: 0, count: listDecks().length, name: listDecks()[0]?.name || "", done: 0, total: 0 });
+  let msg, error = false;
+  try {
+    const r = await updateAllDecks({ onProgress: show, signal: updatingAll.signal });
+    msg = r.failed.length
+      ? `Updated ${r.updated} of ${r.updated + r.failed.length} trips. Not updated (old copy kept): ${r.failed.map((f) => f.name).join(", ")}.`
+      : `All ${r.updated} saved trip${r.updated === 1 ? "" : "s"} updated.`;
+    error = r.failed.length > 0;
+  } catch (e) {
+    msg = e?.name === "AbortError" ? "Update cancelled. Trips not yet updated keep their previous copy." : `Update stopped: ${e.message}`;
+    error = e?.name !== "AbortError";
+  }
+  updatingAll = null;
+  $("#update-all").disabled = false;
+  renderRecent();
+  fill(box, el("p", { class: `off-note${error ? " error" : ""}` }, msg));
+}
+$("#update-all").addEventListener("click", runUpdateAll);
 
 function yearsOf(sample) {
   const ys = [sample.from, sample.to].filter(Boolean).map((d) => d.slice(0, 4));

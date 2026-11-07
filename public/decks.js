@@ -6,7 +6,7 @@
 // photo and audio files. The service worker answers from deck caches first.
 // Deck metadata (name, size, date) is small and lives in localStorage.
 
-import { load, save, speciesUrl, mediaUrl, soundsUrl, hintsUrl, audioUrl } from "./lib.js";
+import { load, save, speciesUrl, mediaUrl, soundsUrl, hintsUrl, audioUrl, photoContextFor } from "./lib.js";
 
 const DECKS_KEY = "bf-decks";
 const PHOTOS_PER_BIRD = 2;           // main photo + "another photo" hint
@@ -48,8 +48,12 @@ export class DeckError extends Error {}
 
 const jsonResponse = (obj) => new Response(JSON.stringify(obj), { headers: { "Content-Type": "application/json" } });
 
+// Asks the service worker to skip saved decks and fetch fresh data, so an
+// update never re-saves old copies (see sw.js fromDeck).
+const FRESH = { "x-bf-fresh": "1" };
+
 async function getJSON(url, signal) {
-  const res = await fetch(url, { signal });
+  const res = await fetch(url, { signal, headers: FRESH });
   if (!res.ok) throw new Error(`${url} → ${res.status}`);
   return res.json();
 }
@@ -77,7 +81,7 @@ async function storePhoto(cache, url, signal) {
 
 async function storeRecording(cache, rec, signal) {
   const url = audioUrl(rec.id);
-  const res = await fetch(url, { signal });
+  const res = await fetch(url, { signal, headers: FRESH });
   if (!res.ok) return null;
   const blob = await res.blob();
   await put(cache, url, new Response(blob, { headers: { "Content-Type": blob.type || "audio/mpeg", "Content-Length": String(blob.size), "Accept-Ranges": "bytes" } }));
@@ -85,15 +89,23 @@ async function storeRecording(cache, rec, signal) {
 }
 
 /**
- * Download a deck. `species` is the list to save (what the user is viewing);
- * `data` is the full species response for the place.
+ * Download (or update) a deck. With `refresh`, the species list is fetched
+ * fresh and the first `top` birds are saved (0 = all); otherwise `data` and
+ * `species` are what the user is viewing.
+ * The new copy is written to a new cache; the old copy is removed only once
+ * the new one is complete, so a failed or cancelled update keeps the old trip.
  * onProgress(done, total, bytes) is called after each bird.
  */
-export async function downloadDeck({ place, month = 0, data, species, top, soundsPerBird, photoWhere = null, onProgress, signal }) {
+export async function downloadDeck({ place, month = 0, data, species, top, soundsPerBird, photoWhere = null, refresh = false, onProgress, signal }) {
   const id = deckId(place);
-  const cache = await caches.open(cacheName(id));
+  if (refresh) {
+    data = await getJSON(speciesUrl(place, month), signal);
+    species = top ? data.species.slice(0, top) : data.species;
+    photoWhere = photoContextFor(place, month, data);
+  }
+  const name = `${cacheName(id)}@${Date.now()}`;
+  const cache = await caches.open(name);
   try { await navigator.storage?.persist?.(); } catch { /* best effort */ }
-  for (const k of await cache.keys()) await cache.delete(k); // replace an older copy
 
   let bytes = 0, done = 0;
   const missing = [];
@@ -136,19 +148,50 @@ export async function downloadDeck({ place, month = 0, data, species, top, sound
     };
     await Promise.all([worker(), worker(), worker()]);
   } catch (e) {
-    await caches.delete(cacheName(id)); // don't leave half a deck behind
+    await caches.delete(name); // don't leave half a deck behind; the old copy stays
     throw e;
   }
 
+  // Swap: drop the previous copy (named in its metadata, or the old fixed name).
+  const prev = listDecks().find((d) => d.id === id);
+  for (const old of new Set([prev?.cache, cacheName(id)])) if (old && old !== name) await caches.delete(old);
   const meta = {
-    id, name: place.name, detail: place.detail || "", lat: place.lat, lng: place.lng,
+    id, name: place.name, detail: place.detail || "", lat: place.lat, lng: place.lng, cache: name,
     savedAt: Date.now(), birds: species.length, top, month, soundsPerBird, bytes, missing,
   };
   putMeta(meta);
   return meta;
 }
 
+/**
+ * Update every saved trip in turn with fresh data, keeping each one's month,
+ * list size and sound choice. onProgress({ index, count, name, done, total }).
+ * Returns { updated, failed: [{ name, error }] }; a cancel stops after the
+ * current trip's partial copy is discarded (its old copy stays).
+ */
+export async function updateAllDecks({ onProgress, signal } = {}) {
+  const decks = listDecks();
+  const failed = [];
+  let updated = 0;
+  for (const [index, d] of decks.entries()) {
+    if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
+    try {
+      await downloadDeck({
+        place: { name: d.name, detail: d.detail, lat: d.lat, lng: d.lng }, month: d.month || 0,
+        top: d.top ?? 25, soundsPerBird: d.soundsPerBird ?? 1, refresh: true, signal,
+        onProgress: (done, total) => onProgress?.({ index, count: decks.length, name: d.name, done, total }),
+      });
+      updated++;
+    } catch (e) {
+      if (signal?.aborted || e?.name === "AbortError") throw e;
+      failed.push({ name: d.name, error: e.message });
+    }
+  }
+  return { updated, failed };
+}
+
 export async function removeDeck(id) {
-  await caches.delete(cacheName(id));
+  const meta = listDecks().find((d) => d.id === id);
+  for (const c of new Set([meta?.cache, cacheName(id)])) if (c) await caches.delete(c);
   save(DECKS_KEY, listDecks().filter((d) => d.id !== id));
 }

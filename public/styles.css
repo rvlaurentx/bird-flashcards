@@ -107,6 +107,9 @@ main { padding-block: 24px 8px; }
   .sp-meter i { transition: width .4s ease-out; }
 }
 
+.saved-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 18px; }
+.saved-head .eyebrow { margin: 0; }
+.saved-head .link-btn { min-height: 44px; }
 .start-row { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
 .start-row:has(> :not([hidden])) { margin: 0; }
 
