@@ -107,6 +107,15 @@ main { padding-block: 24px 8px; }
   .sp-meter i { transition: width .4s ease-out; }
 }
 
+.start-row { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
+.start-row:has(> :not([hidden])) { margin: 0; }
+
+/* ---------- sound quiz ---------- */
+.listen { display: grid; gap: 14px; justify-items: center; padding: 16px; width: 100%; }
+.listen-q { margin: 0; font: 700 1.2rem/1.2 var(--font-display); }
+.listen-btn { min-width: 60%; min-height: 56px; font-size: 1.1rem; }
+.listen audio { width: 100%; }
+
 /* ---------- offline trip decks ---------- */
 .offline-box { display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
 .offline-box p { margin: 0; }

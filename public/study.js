@@ -1,9 +1,10 @@
 // Flashcard study screen: photo → hints → answer → "did you know it?".
+// Sound quiz mode (s.mode === "sound"): recording → hints → answer.
 
 import { $, el, fill, api, load, save, shuffle, mediaUrl, soundsUrl, hintsUrl, periodText } from "./lib.js";
 
 let where = null; // trip place + season for photos (set per session)
-import { grade, sessionOrder, requeue, hintsFor, lookalikes, scoreAnswer, hintCost, maxScore } from "./learn.js";
+import { grade, sessionOrder, requeue, hintsFor, soundHintsFor, progressKey, lookalikes, scoreAnswer, hintCost, maxScore } from "./learn.js";
 
 const BEST_KEY = "bf-best-scores"; // best session score per trip (place + month + list size)
 
@@ -59,7 +60,37 @@ function pickPhoto(sp, m, offset = 0) {
   return m.photos[(seen + offset) % m.photos.length];
 }
 
-const cardHints = (c) => hintsFor(c.sp, c.media?.photos?.length || 0, c.sounds?.recordings?.length || 0, c.extra?.available ? c.extra : null);
+const isSound = () => s?.mode === "sound";
+const pkey = (sp) => progressKey(sp.code, s?.mode);
+
+const cardHints = (c) => {
+  const extra = c.extra?.available ? c.extra : null;
+  return isSound()
+    ? soundHintsFor(c.sp, c.sounds?.recordings?.length || 0, c.media?.photos?.length || 0, extra)
+    : hintsFor(c.sp, c.media?.photos?.length || 0, c.sounds?.recordings?.length || 0, extra);
+};
+
+// Rotate recordings across sound-quiz reviews; offset 1 = "another recording".
+function pickRecording(sp, snd, offset = 0) {
+  const recs = snd?.recordings || [];
+  if (!recs.length) return null;
+  const p = getProgress()[progressKey(sp.code, "sound")];
+  const seen = (p?.right || 0) + (p?.wrong || 0);
+  return recs[(seen + offset) % recs.length];
+}
+
+// Sound quiz: the card's "photo" area is a listening panel.
+function renderListen(c) {
+  const rec = pickRecording(c.sp, c.sounds);
+  const audio = el("audio", { controls: true, preload: "auto", src: rec.url });
+  audio.addEventListener("play", () => document.querySelectorAll("#view-study audio").forEach((a) => a !== audio && a.pause()));
+  audio.addEventListener("error", () => fill($("#photo-frame"), el("p", { class: "photo-note" },
+    navigator.onLine ? "This recording couldn't be played. Use the hints." : "This recording isn't saved for offline use.")));
+  const replay = el("button", { type: "button", class: "btn primary listen-btn", onclick: () => { audio.currentTime = 0; audio.play().catch(() => {}); } }, "▶ Play again");
+  fill($("#photo-frame"), el("div", { class: "listen" }, el("p", { class: "listen-q" }, "Which bird is this?"), replay, audio));
+  $("#photo-credit").textContent = "Recording details are shown with the answer.";
+  audio.play().catch(() => { /* the user can press play */ });
+}
 
 const stopAudio = () => document.querySelectorAll("#view-study audio").forEach((a) => a.pause());
 
@@ -82,12 +113,14 @@ function player(rec, { autoplay = false } = {}) {
 
 let s = null; // session state
 
-export function startSession({ deck, all, placeName, month = 0, photoWhere = null, onExit }) {
+export function startSession({ deck, all, placeName, month = 0, photoWhere = null, mode = "photo", onExit }) {
   where = photoWhere;
+  const key = (sp) => progressKey(sp.code, mode);
   s = {
-    deck, all, placeName, month, photoWhere, onExit, queue: sessionOrder(deck, getProgress()), done: 0, firstTry: new Map(), card: null,
-    score: 0, streak: 0, bestStreak: 0,
+    deck: [...deck], all, placeName, month, photoWhere, mode, onExit, queue: sessionOrder(deck, getProgress(), Math.random, key),
+    done: 0, firstTry: new Map(), card: null, score: 0, streak: 0, bestStreak: 0, skipped: [],
   };
+  $("#view-study").classList.toggle("sound-mode", mode === "sound");
   $("#study-exit").onclick = () => { stopAudio(); onExit(); };
   showCard();
 }
@@ -111,7 +144,8 @@ async function showCard() {
   $("#choices").replaceChildren();
   $("#answer").hidden = true;
   $("#answer").replaceChildren();
-  renderPhoto(null, true);
+  if (isSound()) { fill($("#photo-frame"), el("p", { class: "photo-note" }, "Loading recording…")); $("#photo-credit").textContent = ""; }
+  else renderPhoto(null, true);
   renderActions();
 
   const [m, snd, extra] = await Promise.all([mediaFor(card), soundsFor(card), extraFor(card)]);
@@ -119,7 +153,15 @@ async function showCard() {
   s.card.media = m;
   s.card.sounds = snd;
   s.card.extra = extra;
-  renderPhoto(pickPhoto(card, m), false);
+  if (isSound()) {
+    // No recording (none on xeno-canto, or not saved for offline): skip the bird.
+    if (!snd?.recordings?.length) {
+      s.skipped.push(card);
+      s.deck = s.deck.filter((x) => x !== card);
+      return showCard();
+    }
+    renderListen(s.card);
+  } else renderPhoto(pickPhoto(card, m), false);
   renderActions(); // available hints depend on photos and sounds
 }
 
@@ -169,6 +211,10 @@ function showHint() {
   if (hint.kind === "choices") node = showChoices();
   else if (hint.kind === "photo") node = showExtraPhoto(c);
   else if (hint.kind === "sound") node = showSoundHint(c);
+  else if (hint.kind === "recording") {
+    const rec = pickRecording(c.sp, c.sounds, 1);
+    if (rec) $("#hints").append(node = player(rec, { autoplay: true }));
+  } else if (hint.kind === "seephoto") node = showExtraPhoto(c, 0);
   else {
     const body = Array.isArray(hint.text)
       ? el("ul", { class: "hint-list" }, ...hint.text.map((t) => el("li", {}, t)))
@@ -196,8 +242,8 @@ function bringIntoView(node) {
   });
 }
 
-function showExtraPhoto(c) {
-  const ph = pickPhoto(c.sp, c.media, 1);
+function showExtraPhoto(c, offset = 1) {
+  const ph = pickPhoto(c.sp, c.media, offset);
   if (!ph) return;
   const credit = el("figcaption", { class: "credit" }, ...photoCredit(ph));
   const img = el("img", { src: ph.url, alt: "Another photo of the same bird", decoding: "async" });
@@ -274,6 +320,8 @@ async function reveal(chosen) {
   const pct = Math.round(sp.freq * 100);
   const ans = $("#answer");
   ans.hidden = false;
+  // Sound quiz: show the bird's photo now.
+  if (isSound()) renderPhoto(pickPhoto(sp, c.media), false);
   setRevealed(true);
   fill(ans,
     chosen ? (chosen.code === sp.code
@@ -311,7 +359,7 @@ function showPoints(r, hintsUsed) {
   if (r.practice) { label = "Practice round"; note = "no points on a second try"; }
   else if (!r.points) { label = "0 points"; note = "it'll come back in a few cards"; }
   else {
-    label = `+${r.points} points`;
+    label = `+${r.points} point${r.points === 1 ? "" : "s"}`;
     note = r.clean ? (r.bonus ? `no hints · ${r.streak} in a row, +${r.bonus} streak bonus` : "no hints!") : `${hintsUsed} hint${hintsUsed === 1 ? "" : "s"}`;
   }
   const badge = el("p", { class: `points ${r.points ? (r.clean ? "clean" : "some") : "none"}` }, el("strong", {}, label), ` · ${note}`);
@@ -327,7 +375,7 @@ function record(knewIt) {
   s.streak = r.streak;
   s.bestStreak = Math.max(s.bestStreak, s.streak);
   showPoints(r, c.hintsUsed);
-  save(PROGRESS_KEY, grade(getProgress(), c.sp.code, { knewIt, hintsUsed: c.hintsUsed }));
+  save(PROGRESS_KEY, grade(getProgress(), pkey(c.sp), { knewIt, hintsUsed: c.hintsUsed }));
   if (!s.firstTry.has(c.sp.code)) s.firstTry.set(c.sp.code, knewIt && c.hintsUsed === 0);
   if (!knewIt) s.queue = requeue(s.queue, c.sp);
   updateCounter();
@@ -342,8 +390,18 @@ function finish() {
   const missed = s.deck.filter((sp) => s.firstTry.get(sp.code) === false || s.firstTry.get(sp.code) === undefined);
   updateCounter();
   $("#study-meter").style.width = "100%";
-  // Best score for this trip (same place, month and list size).
-  const key = `${s.placeName}|${s.month}|${total}`;
+  if (!total) {
+    fill($("#photo-frame"), el("div", { class: "done" },
+      el("p", { class: "done-big" }, "No recordings"),
+      el("p", { class: "done-note" }, navigator.onLine
+        ? "None of these birds have recordings available."
+        : "This trip was saved without sounds. Update it with sounds to quiz by ear offline.")));
+    $("#photo-credit").textContent = ""; $("#hints").replaceChildren(); $("#answer").hidden = true;
+    $("#actions").replaceChildren(el("button", { type: "button", class: "btn primary wide", onclick: () => s.onExit() }, "Back to list"));
+    return;
+  }
+  // Best score for this trip (same place, month, list size and quiz type).
+  const key = `${s.placeName}|${s.month}|${total}${isSound() ? "|sound" : ""}`;
   const bests = load(BEST_KEY, {});
   const prev = bests[key]?.score;
   const isBest = prev === undefined || s.score > prev;
@@ -353,7 +411,8 @@ function finish() {
     el("p", {}, `out of ${maxScore(total)} possible`),
     prev !== undefined && isBest ? el("p", { class: "new-best" }, `New best! Previous: ${prev}`) : null,
     prev !== undefined && !isBest ? el("p", { class: "done-note" }, `Your best for this trip: ${prev}`) : null,
-    el("p", { class: "done-note" }, `${clean} of ${total} named with no hints · best streak ${s.bestStreak}`),
+    el("p", { class: "done-note" }, `${clean} of ${total} named ${isSound() ? "by ear " : ""}with no hints · best streak ${s.bestStreak}`),
+    s.skipped.length ? el("p", { class: "done-note" }, `Skipped ${s.skipped.length} without a recording.`) : null,
   ));
   $("#photo-credit").textContent = "";
   $("#hints").replaceChildren();
@@ -363,6 +422,6 @@ function finish() {
   ans.replaceChildren(el("p", { class: "ans-freq" }, "Needed hints or missed:"), el("p", {}, missed.map((m) => m.comName).join(", ")));
   $("#actions").replaceChildren(
     el("button", { type: "button", class: "btn ghost", onclick: () => s.onExit() }, "Back to list"),
-    el("button", { type: "button", class: "btn primary", onclick: () => startSession(s) }, "Study again"),
+    el("button", { type: "button", class: "btn primary", onclick: () => startSession({ ...s, deck: [...s.deck, ...s.skipped] }) }, isSound() ? "Quiz again" : "Study again"),
   );
 }

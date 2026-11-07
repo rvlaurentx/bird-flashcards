@@ -106,6 +106,7 @@ async function loadSpecies() {
   $("#species").replaceChildren();
   $("#list-count").textContent = "";
   $("#study-start").hidden = true;
+  $("#sound-start").hidden = true;
   const msg = $("#list-msg");
   msg.className = "msg";
   msg.textContent = state.month
@@ -140,6 +141,7 @@ function renderSpecies() {
   const btn = $("#study-start");
   btn.hidden = !list.length;
   btn.textContent = `Study these ${list.length} birds`;
+  $("#sound-start").hidden = !list.length;
   renderOffline();
   $("#species").replaceChildren(...list.map((sp, i) => {
     const li = document.createElement("li");
@@ -274,14 +276,16 @@ $("#search-form").addEventListener("submit", (e) => {
   if (q.length >= 2) searchPlaces(q);
 });
 $("#back").addEventListener("click", () => { show("search"); renderRecent(); });
-$("#study-start").addEventListener("click", () => {
+function startStudy(mode) {
   show("study");
   startSession({
     deck: visible(), all: state.data.species, placeName: state.place.name, month: state.month,
-    photoWhere: photoContextFor(state.place, state.month, state.data),
+    photoWhere: photoContextFor(state.place, state.month, state.data), mode,
     onExit: () => { show("list"); renderSpecies(); },
   });
-});
+}
+$("#study-start").addEventListener("click", () => startStudy("photo"));
+$("#sound-start").addEventListener("click", () => startStudy("sound"));
 $("#month").addEventListener("change", () => {
   setMonth(Number($("#month").value));
   save(MONTH_KEY, state.month);

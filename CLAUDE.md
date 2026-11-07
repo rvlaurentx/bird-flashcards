@@ -166,6 +166,17 @@ Logic lives in `public/learn.js` (no DOM, unit-tested); UI in `public/study.js`.
   screen shows the score out of `maxScore()` (includes streak bonuses), best
   streak, and best per trip (localStorage `bf-best-scores`, key
   place|month|list size). Points are separate from the Leitner boxes.
+- **Sound quiz** (user's request: identify by ear). "Sound quiz" button next
+  to "Study these birds"; `startSession({ mode: "sound" })`. The card shows a
+  listening panel (recording autoplays, "Play again"), no photo; recording
+  credit is shown with the answer. Hints (`soundHintsFor()`): another
+  recording (−1) → habitat (−1) → size (−1) → family (−2) → see a photo (−3)
+  → choices (−3); no field marks (visual). The photo appears on reveal.
+  Progress **by ear is separate** (`progressKey(code, "sound")` =
+  `code@ear` in `bf-progress`); recordings rotate across reviews
+  (`pickRecording`). Birds without a recording are skipped (counted in the
+  summary); a trip saved with no sounds shows "No recordings" offline. Best
+  scores keyed with `|sound`.
 - Photos rotate between reviews so you learn the bird, not one picture.
 - **Local, in-season photos first** (user's request: right subspecies and
   plumage). `/api/media` takes optional `lat`, `lng`, `month`; `inat.js`

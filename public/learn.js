@@ -16,13 +16,13 @@ export function grade(progress, code, { knewIt, hintsUsed }) {
 
 // Study order: random (user's request), but weaker birds still come before
 // ones you know. A fresh deck (all box 0) is fully shuffled.
-export function sessionOrder(deck, progress, rand = Math.random) {
+export function sessionOrder(deck, progress, rand = Math.random, key = (sp) => sp.code) {
   const shuffled = [...deck];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  const box = (s) => progress[s.code]?.box ?? 0;
+  const box = (s) => progress[key(s)]?.box ?? 0;
   return shuffled.sort((a, b) => box(a) - box(b)); // stable: keeps random order within a box
 }
 
@@ -49,6 +49,22 @@ export function hintsFor(sp, photoCount = 0, soundCount = 0, extra = null) {
   if (extra?.habitat) hints.push({ kind: "habitat", label: "Habitat", text: extra.habitat });
   if (sp.family) hints.push({ kind: "family", label: "Family", text: sp.family });
   if (extra?.fieldMarks?.length) hints.push({ kind: "marks", label: "Field marks", text: extra.fieldMarks });
+  hints.push({ kind: "choices", label: "Choices", text: "" });
+  return hints;
+}
+
+// ---------- sound quiz (user's request: identify by ear) ----------
+// Progress by ear is tracked separately from progress by sight.
+export const progressKey = (code, mode = "photo") => (mode === "sound" ? `${code}@ear` : code);
+
+// Order: another recording → habitat → size → family → see a photo → choices.
+export function soundHintsFor(sp, recordingCount = 0, photoCount = 0, extra = null) {
+  const hints = [];
+  if (recordingCount > 1) hints.push({ kind: "recording", label: "Another recording", text: "" });
+  if (extra?.habitat) hints.push({ kind: "habitat", label: "Habitat", text: extra.habitat });
+  if (extra?.size) hints.push({ kind: "size", label: "Size", text: extra.size });
+  if (sp.family) hints.push({ kind: "family", label: "Family", text: sp.family });
+  if (photoCount > 0) hints.push({ kind: "seephoto", label: "See a photo", text: "" });
   hints.push({ kind: "choices", label: "Choices", text: "" });
   return hints;
 }
@@ -82,7 +98,7 @@ export function lookalikes(sp, all, n = 3) {
 // ---------- points (user's request: reward using fewer hints) ----------
 // Up to 10 points per bird; each hint costs what it gives away.
 export const MAX_POINTS = 10;
-export const HINT_COST = { photo: 1, sound: 2, family: 2, size: 1, marks: 2, habitat: 1, choices: 3 };
+export const HINT_COST = { photo: 1, sound: 2, family: 2, size: 1, marks: 2, habitat: 1, choices: 3, recording: 1, seephoto: 3 };
 export const STREAK_AT = 3;     // clean answers in a row before the bonus starts
 export const STREAK_BONUS = 2;  // extra points per clean answer while on a streak
 
