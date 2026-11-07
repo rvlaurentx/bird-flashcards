@@ -102,7 +102,7 @@ test("sound quiz: hint order and costs; ear progress kept separate", async () =>
   const { soundHintsFor, progressKey, sessionOrder, scoreAnswer } = await import("../public/learn.js");
   const sp = { code: "swaspa", family: "New World Sparrows" };
   const extra = { size: "14 cm", habitat: "Marshes.", fieldMarks: ["x"] };
-  assert.deepEqual(soundHintsFor(sp, 2, 3, extra).map((h) => h.kind), ["recording", "habitat", "size", "family", "seephoto", "choices"]);
+  assert.deepEqual(soundHintsFor(sp, 2, 3, extra).map((h) => h.kind), ["recording", "habitat", "family", "size", "seephoto", "choices"]);
   assert.deepEqual(soundHintsFor(sp, 1, 0, null).map((h) => h.kind), ["family", "choices"], "no second recording, no photo, no extras");
   assert.ok(!soundHintsFor(sp, 2, 3, extra).some((h) => h.kind === "marks"), "visual field marks aren't sound hints");
   assert.equal(progressKey("swaspa"), "swaspa");

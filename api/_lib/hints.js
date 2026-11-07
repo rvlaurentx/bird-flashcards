@@ -57,47 +57,116 @@ export async function wikiArticle(sciName, comName) {
 }
 
 // ---------- size comparison ----------
-// Familiar reference birds with typical field-guide length (cm) and weight
-// (g). Spaced closely at the small end, where birders most need it
-// (a chickadee is much smaller than a sparrow).
-export const REFS = [
-  ["a Ruby-throated Hummingbird", 9, 3], ["a kinglet", 10, 6], ["a chickadee", 12, 10],
-  ["a Dark-eyed Junco", 15, 20], ["a House Sparrow", 16, 28], ["an Eastern Bluebird", 18, 31],
-  ["a Northern Cardinal", 22, 45], ["an American Robin", 25, 77], ["a Blue Jay", 28, 85],
-  ["a Mourning Dove", 30, 120], ["an American Crow", 45, 450], ["a Mallard", 58, 1100],
-  ["a Canada Goose", 95, 4000], ["a Great Blue Heron", 115, 2400],
-];
+// Birds are compared with familiar birds of a similar shape (user's request,
+// confirmed by a professional bird guide: a Red-tailed Hawk and a Mallard
+// weigh the same but don't look the same size). Reference figures are typical
+// field-guide values: [name, length cm, wingspan cm, weight g].
+export const REF_GROUPS = {
+  raptors: [
+    ["an American Kestrel", 25, 56, 115], ["a Sharp-shinned Hawk", 28, 55, 140],
+    ["an Eastern Screech-Owl", 21, 51, 170], ["a Cooper's Hawk", 42, 78, 450],
+    ["a Red-shouldered Hawk", 48, 100, 550], ["a Barred Owl", 50, 105, 700],
+    ["a Red-tailed Hawk", 52, 122, 1100], ["an Osprey", 57, 160, 1600],
+    ["a Turkey Vulture", 70, 170, 1800], ["a Bald Eagle", 86, 200, 4700],
+  ],
+  waterfowl: [
+    ["a Green-winged Teal", 35, 58, 350], ["a Bufflehead", 35, 55, 400], ["a Wood Duck", 50, 70, 650],
+    ["a Mallard", 58, 90, 1100], ["a Canada Goose", 95, 150, 4000], ["a Mute Swan", 150, 220, 10000],
+  ],
+  waders: [
+    ["a Green Heron", 44, 66, 210], ["a Great Egret", 98, 135, 870],
+    ["a Great Blue Heron", 115, 180, 2400], ["a Sandhill Crane", 110, 190, 4500],
+  ],
+  shorebirds: [
+    ["a Least Sandpiper", 15, 30, 23], ["a Spotted Sandpiper", 19, 38, 40], ["a Killdeer", 25, 48, 90],
+    ["a Greater Yellowlegs", 33, 62, 170], ["a Willet", 38, 66, 215], ["a Long-billed Curlew", 58, 88, 600],
+  ],
+  gulls: [
+    ["a Forster's Tern", 33, 78, 160], ["a Laughing Gull", 40, 102, 300], ["a Ring-billed Gull", 47, 120, 520],
+    ["a Herring Gull", 60, 140, 1100], ["a Great Black-backed Gull", 76, 160, 1650],
+  ],
+  landbirds: [
+    ["a Ruby-throated Hummingbird", 8.5, 10, 3], ["a kinglet", 10, 16, 6], ["a chickadee", 12, 18, 10],
+    ["a Dark-eyed Junco", 15, 23, 20], ["a House Sparrow", 16, 24, 28], ["an Eastern Bluebird", 18, 29, 30],
+    ["a Northern Cardinal", 22, 28, 45], ["an American Robin", 25, 36, 77], ["a Blue Jay", 27, 38, 85],
+    ["a Mourning Dove", 29, 45, 120], ["an American Crow", 45, 90, 450], ["a Wild Turkey", 110, 140, 7000],
+  ],
+};
+
+// eBird family name → reference group.
+export function refGroup(family = "") {
+  const f = String(family);
+  if (/hawks|eagles|kites|falcons|caracaras|vultures|osprey|owls/i.test(f)) return "raptors";
+  if (/ducks|geese|swans|waterfowl/i.test(f)) return "waterfowl";
+  if (/herons|egrets|bitterns|cranes|ibises|spoonbills|storks/i.test(f)) return "waders";
+  if (/sandpipers|plovers|lapwings|oystercatchers|stilts|avocets|jacanas/i.test(f)) return "shorebirds";
+  if (/gulls|terns|skimmers/i.test(f)) return "gulls";
+  return "landbirds";
+}
+
+// Combined size: length, wingspan and the cube root of weight (a length-like
+// measure of bulk), each scaled to "length units" and averaged in log space,
+// so neither a long bill/neck nor a long wing alone makes a bird "bigger".
+const ALL_REFS = Object.values(REF_GROUPS).flat();
+const geoMean = (xs) => Math.exp(xs.reduce((t, x) => t + Math.log(x), 0) / xs.length);
+const WING_TO_LEN = geoMean(ALL_REFS.map(([, l, w]) => l / w));
+const MASS_TO_LEN = geoMean(ALL_REFS.map(([, l, , g]) => l / Math.cbrt(g)));
+
+/** Combined size from whichever of length / wingspan / weight are known. */
+export function sizeScore({ length, wingspan, mass }, use = { length: true, wingspan: true, mass: true }) {
+  const parts = [];
+  if (use.length && length > 0) parts.push(Math.log(length));
+  if (use.wingspan && wingspan > 0) parts.push(Math.log(wingspan * WING_TO_LEN));
+  if (use.mass && mass > 0) parts.push(Math.log(Math.cbrt(mass) * MASS_TO_LEN));
+  return parts.length ? parts.reduce((a, b) => a + b, 0) / parts.length : null;
+}
 
 // A reference shares a distinctive word with the bird's own name
 // (e.g. "chickadee" for Carolina Chickadee): never compare a bird with its kind.
 function sameKind(refName, exclude) {
   const ex = String(exclude).toLowerCase();
-  return refName.toLowerCase().replace(/^an? /, "").split(/[\s-]+/).some((w) => w.length > 4 && ex.includes(w));
+  return refName.toLowerCase().replace(/^an? /, "").split(/[\s-]+/)
+    .some((w) => w.length > 4 && !GENERIC.has(w) && ex.includes(w)); // "great", "northern"… don't count
 }
 
 // One decimal for small values (11.5 cm), whole numbers above 20.
 const fmt = (n) => (n < 20 ? n.toFixed(1).replace(/\.0$/, "") : String(Math.round(n)));
 const range = (lo, hi, unit) => (fmt(hi) !== fmt(lo) ? `${fmt(lo)}–${fmt(hi)} ${unit}` : `${fmt(lo)} ${unit}`);
+const pair = (lo, hi) => {
+  const a = Number(lo), b = Number(hi ?? lo);
+  if (!Number.isFinite(a) || a <= 0) return null;
+  return [a, Number.isFinite(b) && b > a ? b : a];
+};
+const mid = (p) => (p ? (p[0] + p[1]) / 2 : null);
 
-// "12–15 cm (about 5.3 in), 15–20 g: bigger than a chickadee, smaller than a Dark-eyed Junco"
-// `exclude`: the bird's own name. Weight is optional.
-export function sizeText(min, max, exclude = "", massMin = null, massMax = null) {
-  const lo = Number(min), hi = Number(max ?? min);
-  if (!Number.isFinite(lo) || lo <= 0) return null;
-  const top = Number.isFinite(hi) && hi > lo ? hi : lo;
-  const mid = (lo + top) / 2;
-  const inches = (mid / 2.54).toFixed(mid < 25 ? 1 : 0);
-  const gLo = Number(massMin), gHi = Number(massMax ?? massMin);
-  const grams = Number.isFinite(gLo) && gLo > 0 ? `, ${range(gLo, Number.isFinite(gHi) && gHi > gLo ? gHi : gLo, "g")}` : "";
+/**
+ * "45–65 cm (about 21 in), wingspan 110–145 cm, 690–1460 g: bigger than a
+ * Cooper's Hawk, smaller than an Osprey". `dims` = { length, wingspan, mass },
+ * each [min, max] or null. Compared within the bird's shape group, on the
+ * measurements this bird actually has. `exclude` = the bird's own name.
+ */
+export function sizeText(dims, exclude = "", family = "") {
+  const L = pair(...(dims.length || [])), W = pair(...(dims.wingspan || [])), M = pair(...(dims.mass || []));
+  if (!L && !W && !M) return null;
+  const me = { length: mid(L), wingspan: mid(W), mass: mid(M) };
+  const use = { length: !!L, wingspan: !!W, mass: !!M };
+  const score = sizeScore(me, use);
 
-  const refs = REFS.filter(([n]) => !sameKind(n, exclude));
-  const close = refs.find(([, cm]) => Math.abs(mid - cm) / cm <= 0.05);
-  const below = refs.filter(([, cm]) => cm < mid).at(-1);
-  const above = refs.find(([, cm]) => cm > mid);
-  const comparison = close ? `about the size of ${close[0]}`
-    : below && above ? `bigger than ${below[0]}, smaller than ${above[0]}`
-    : below ? `bigger than ${below[0]}` : `smaller than ${above[0]}`;
-  return `${range(lo, top, "cm")} (about ${inches} in)${grams}: ${comparison}`;
+  const refs = REF_GROUPS[refGroup(family)].filter(([n]) => !sameKind(n, exclude))
+    .map(([n, l, w, g]) => ({ n, s: sizeScore({ length: l, wingspan: w, mass: g }, use) }))
+    .sort((a, b) => a.s - b.s);
+  const close = refs.find((r) => Math.abs(score - r.s) <= Math.log(1.06));
+  const below = refs.filter((r) => r.s < score).at(-1);
+  const above = refs.find((r) => r.s > score);
+  const comparison = close ? `about the size of ${close.n}`
+    : below && above ? `bigger than ${below.n}, smaller than ${above.n}`
+    : below ? `bigger than ${below.n}` : above ? `smaller than ${above.n}` : "";
+
+  const parts = [];
+  if (L) parts.push(`${range(L[0], L[1], "cm")} (about ${(mid(L) / 2.54).toFixed(mid(L) < 25 ? 1 : 0)} in)`);
+  if (W) parts.push(`wingspan ${range(W[0], W[1], "cm")}`);
+  if (M) parts.push(range(M[0], M[1], "g"));
+  return `${parts.join(", ")}${comparison ? `: ${comparison}` : ""}`;
 }
 
 // ---------- hiding the name ----------
@@ -118,6 +187,8 @@ export function redact(text, comName, sciName) {
 const HintsSchema = z.object({
   length_cm_min: z.number().nullable(),
   length_cm_max: z.number().nullable(),
+  wingspan_cm_min: z.number().nullable(),
+  wingspan_cm_max: z.number().nullable(),
   mass_g_min: z.number().nullable(),
   mass_g_max: z.number().nullable(),
   field_marks: z.array(z.string()),
@@ -127,6 +198,7 @@ const HintsSchema = z.object({
 const SYSTEM = `You write identification hints for a bird flashcard app. The learner sees a photo and tries to name the bird; each hint should help without giving the answer away.
 Use only facts stated in the provided Wikipedia text.
 - length_cm_min / length_cm_max: the adult body length in centimetres as stated (convert inches if needed). Use the same number twice for a single value. Use null if no length is given (do not use wingspan or weight).
+- wingspan_cm_min / wingspan_cm_max: the wingspan in centimetres as stated (convert inches). Same number twice for a single value; null if not given.
 - mass_g_min / mass_g_max: the adult weight in grams as stated (convert ounces or kilograms). Same number twice for a single value; null if not given.
 - field_marks: 2 or 3 short phrases (each under 15 words) naming the most useful visual features for identifying the adult in the field: colours, patterns, bill, shape, and how males and females differ if notable.
 - habitat: one short sentence (under 20 words) on where it is usually found, or null.
@@ -156,24 +228,28 @@ export async function summarize(text, comName, sciName) {
 }
 
 // Turn Claude's output into the app's hint shape, hiding the name.
-export function toHints(out, comName, sciName) {
+export function toHints(out, comName, sciName, family = "") {
   if (!out) return { size: null, fieldMarks: [], habitat: null };
   const clean = (s) => redact(String(s || "").trim().replace(/\.$/, ""), comName, sciName);
   return {
-    size: sizeText(out.length_cm_min, out.length_cm_max, comName, out.mass_g_min, out.mass_g_max),
+    size: sizeText({
+      length: [out.length_cm_min, out.length_cm_max],
+      wingspan: [out.wingspan_cm_min, out.wingspan_cm_max],
+      mass: [out.mass_g_min, out.mass_g_max],
+    }, comName, family),
     fieldMarks: (out.field_marks || []).map(clean).filter(Boolean).slice(0, 3),
     habitat: out.habitat ? clean(out.habitat) + "." : null,
   };
 }
 
-export async function speciesHints(sciName, comName) {
+export async function speciesHints(sciName, comName, family = "") {
   if (!getAnthropicKey()) return { available: false, reason: "are off because ANTHROPIC_API_KEY is not set" };
   const article = await wikiArticle(sciName, comName);
   if (!article) return { available: true, size: null, fieldMarks: [], habitat: null, source: null };
   const out = await summarize(sourceText(splitSections(article.extract)), comName, sciName);
   return {
     available: true,
-    ...toHints(out, comName, sciName),
+    ...toHints(out, comName, sciName, family),
     source: { title: article.title, url: article.url, license: "CC BY-SA 4.0" },
   };
 }

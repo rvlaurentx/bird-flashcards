@@ -11,8 +11,9 @@ export default async function handler(req, res) {
     const q = new URL(req.url, "http://x").searchParams;
     const sci = (q.get("sci") || "").trim();
     const name = (q.get("name") || "").trim();
+    const family = (q.get("family") || "").trim(); // picks the size-comparison group
     if (!sci && !name) throw new ApiError(400, "sci or name is required.");
-    const data = process.env.EBIRD_MOCK === "1" ? mockHints(sci, name) : await speciesHints(sci, name);
+    const data = process.env.EBIRD_MOCK === "1" ? mockHints(sci, name) : await speciesHints(sci, name, family);
     if (!data.available) res.setHeader("Cache-Control", "no-store");
     // Hints change only if Wikipedia does; cache for 30 days once made.
     send(res, 200, data, data.available ? 60 * 60 * 24 * 30 : 0);

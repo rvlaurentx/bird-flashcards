@@ -57,13 +57,15 @@ export function hintsFor(sp, photoCount = 0, soundCount = 0, extra = null) {
 // Progress by ear is tracked separately from progress by sight.
 export const progressKey = (code, mode = "photo") => (mode === "sound" ? `${code}@ear` : code);
 
-// Order: another recording → habitat → size → family → see a photo → choices.
+// Order: another recording → habitat → family → size → see a photo → choices.
+// Size comes after family because its comparison birds share the bird's
+// shape group (e.g. other raptors), which would hint at the family.
 export function soundHintsFor(sp, recordingCount = 0, photoCount = 0, extra = null) {
   const hints = [];
   if (recordingCount > 1) hints.push({ kind: "recording", label: "Another recording", text: "" });
   if (extra?.habitat) hints.push({ kind: "habitat", label: "Habitat", text: extra.habitat });
-  if (extra?.size) hints.push({ kind: "size", label: "Size", text: extra.size });
   if (sp.family) hints.push({ kind: "family", label: "Family", text: sp.family });
+  if (extra?.size) hints.push({ kind: "size", label: "Size", text: extra.size });
   if (photoCount > 0) hints.push({ kind: "seephoto", label: "See a photo", text: "" });
   hints.push({ kind: "choices", label: "Choices", text: "" });
   return hints;

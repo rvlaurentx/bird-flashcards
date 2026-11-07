@@ -24,15 +24,31 @@ test("Wikipedia sections: keeps intro, description and habitat; skips the rest",
   assert.doesNotMatch(text, /taxonomy text/);
 });
 
-test("size text brackets between two familiar birds, never the bird's own kind", () => {
-  assert.equal(sizeText(12, 15, "Swamp Sparrow", 15, 20), "12–15 cm (about 5.3 in), 15–20 g: bigger than a chickadee, smaller than a Dark-eyed Junco");
-  assert.equal(sizeText(11.5, 12, "Carolina Chickadee", 9, 12), "11.5–12 cm (about 4.6 in), 9–12 g: bigger than a kinglet, smaller than a Dark-eyed Junco");
-  assert.match(sizeText(15, 17, "Song Sparrow"), /bigger than a Dark-eyed Junco, smaller than an Eastern Bluebird$/, "no House Sparrow for a sparrow");
-  assert.match(sizeText(29, 31, "Rock Pigeon"), /about the size of a Mourning Dove$/);
-  assert.match(sizeText(140, 150, "Sandhill Crane"), /bigger than a Great Blue Heron$/);
-  assert.match(sizeText(7, 8, "Calliope Hummingbird"), /smaller than a kinglet$/);
-  assert.doesNotMatch(sizeText(12, 15, "Swamp Sparrow"), / g:/, "weight only when known");
-  assert.equal(sizeText(null, null), null);
+test("size: combined length/wingspan/weight, compared within the bird's shape group", () => {
+  const d = (length, wingspan, mass) => ({ length, wingspan, mass });
+  // The case that prompted this: a Red-tailed Hawk is not "Mallard-sized"
+  const rtha = sizeText(d([45, 65], [110, 145], [690, 1460]), "Red-tailed Hawk", "Hawks, Eagles, and Kites");
+  assert.equal(rtha, "45–65 cm (about 22 in), wingspan 110–145 cm, 690–1460 g: bigger than a Barred Owl, smaller than an Osprey");
+  assert.doesNotMatch(rtha, /Mallard/);
+  assert.equal(sizeText(d([12, 15], [18, 20], [15, 20]), "Swamp Sparrow", "New World Sparrows"),
+    "12–15 cm (about 5.3 in), wingspan 18–20 cm, 15–20 g: bigger than a chickadee, smaller than a Dark-eyed Junco");
+  assert.match(sizeText(d([11.5, 12], [15, 20], [9, 12]), "Carolina Chickadee", "Tits, Chickadees, and Titmice"), /bigger than a kinglet, smaller than a Dark-eyed Junco$/);
+  assert.match(sizeText(d([97, 137], [167, 201], [2100, 2500]), "Great Blue Heron", "Herons, Egrets, and Bitterns"), /bigger than a Great Egret, smaller than a Sandhill Crane$/, "'great' alone isn't the same kind");
+  assert.match(sizeText(d([50, 65], [82, 95], [1000, 1300]), "Mallard", "Ducks, Geese, and Waterfowl"), /Wood Duck.*Canada Goose/);
+  assert.match(sizeText(d([15, 17], null, null), "Song Sparrow", "New World Sparrows"), /^15–17 cm \(about 6.3 in\): bigger than a Dark-eyed Junco, smaller than an Eastern Bluebird$/, "length only; no House Sparrow for a sparrow");
+  assert.equal(sizeText(d(null, null, null), "X"), null);
+});
+
+test("size groups from eBird family names", async () => {
+  const { refGroup } = await import("../api/_lib/hints.js");
+  assert.equal(refGroup("Hawks, Eagles, and Kites"), "raptors");
+  assert.equal(refGroup("Owls"), "raptors");
+  assert.equal(refGroup("Ducks, Geese, and Waterfowl"), "waterfowl");
+  assert.equal(refGroup("Herons, Egrets, and Bitterns"), "waders");
+  assert.equal(refGroup("Sandpipers and Allies"), "shorebirds");
+  assert.equal(refGroup("Gulls, Terns, and Skimmers"), "gulls");
+  assert.equal(refGroup("New World Sparrows"), "landbirds");
+  assert.equal(refGroup(""), "landbirds");
 });
 
 test("names are hidden in hint text", () => {
@@ -49,6 +65,7 @@ test("hint order: photo, song, size, habitat, family, field marks, choices", () 
   assert.deepEqual(hintsFor(sp, 2, 1, extra).map((h) => h.kind), ["photo", "sound", "size", "habitat", "family", "marks", "choices"]);
   assert.deepEqual(hintsFor(sp, 2, 1, null).map((h) => h.kind), ["photo", "sound", "family", "choices"]);
   assert.equal(hintsUrl({ sciName: "Cardinalis cardinalis", comName: "Northern Cardinal" }), "/api/hints?sci=Cardinalis%20cardinalis&name=Northern%20Cardinal");
+  assert.equal(hintsUrl({ sciName: "Buteo jamaicensis", comName: "Red-tailed Hawk", family: "Hawks, Eagles, and Kites" }), "/api/hints?sci=Buteo%20jamaicensis&name=Red-tailed%20Hawk&family=Hawks%2C%20Eagles%2C%20and%20Kites");
 });
 
 test("without ANTHROPIC_API_KEY the hints are simply off", async () => {
@@ -70,7 +87,7 @@ test("full pipeline: Wikipedia → Claude Haiku 5.5 (structured output) → hint
     }
     if (url.includes("api.anthropic.com")) {
       sent = JSON.parse(typeof input === "string" ? init.body : await input.text());
-      const json = { length_cm_min: 21, length_cm_max: 23, mass_g_min: 42, mass_g_max: 48, field_marks: ["Male bright red with black face mask", "Tall crest; thick red cone-shaped bill"], habitat: "Woodland edges, hedgerows and gardens" };
+      const json = { length_cm_min: 21, length_cm_max: 23, wingspan_cm_min: 25, wingspan_cm_max: 31, mass_g_min: 42, mass_g_max: 48, field_marks: ["Male bright red with black face mask", "Tall crest; thick red cone-shaped bill"], habitat: "Woodland edges, hedgerows and gardens" };
       return new Response(JSON.stringify({
         id: "msg_test", type: "message", role: "assistant", model: HINTS_MODEL, stop_reason: "end_turn", stop_sequence: null,
         content: [{ type: "text", text: JSON.stringify(json) }],
@@ -80,13 +97,14 @@ test("full pipeline: Wikipedia → Claude Haiku 5.5 (structured output) → hint
     throw new Error("unexpected fetch " + url);
   };
   try {
-    const r = await speciesHints("Cardinalis cardinalis", "Northern Cardinal");
+    const r = await speciesHints("Cardinalis cardinalis", "Northern Cardinal", "Cardinals, Grosbeaks, and Allies");
     assert.equal(sent.model, "claude-haiku-5-5");
     assert.equal(sent.output_config.effort, "low");
     assert.equal(sent.output_config.format.type, "json_schema");
     assert.match(sent.messages[0].content, /21–23 cm/);
     assert.equal(r.available, true);
-    assert.equal(r.size, "21–23 cm (about 8.7 in), 42–48 g: bigger than an Eastern Bluebird, smaller than an American Robin");
+    assert.match(r.size, /^21–23 cm \(about 8.7 in\), wingspan 25–31 cm, 42–48 g: /);
+    assert.doesNotMatch(r.size, /Cardinal/i, "never compared with itself");
     assert.deepEqual(r.fieldMarks, ["Male bright red with black face mask", "Tall crest; thick red cone-shaped bill"]);
     assert.equal(r.habitat, "Woodland edges, hedgerows and gardens.");
     assert.equal(r.source.license, "CC BY-SA 4.0");

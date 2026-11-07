@@ -63,5 +63,6 @@ export function photoContextFor(place, month, data) {
   return { lat: place.lat, lng: place.lng, month: month || (latest ? Number(latest[1]) : 0) };
 }
 export const soundsUrl = (sp) => `/api/sounds?sci=${encodeURIComponent(sp.sciName)}&name=${encodeURIComponent(sp.comName)}`;
-export const hintsUrl = (sp) => `/api/hints?sci=${encodeURIComponent(sp.sciName)}&name=${encodeURIComponent(sp.comName)}`;
+export const hintsUrl = (sp) => `/api/hints?sci=${encodeURIComponent(sp.sciName)}&name=${encodeURIComponent(sp.comName)}` +
+  (sp.family ? `&family=${encodeURIComponent(sp.family)}` : "");
 export const audioUrl = (recId) => `/api/audio?id=${String(recId).replace(/\D/g, "")}`;
