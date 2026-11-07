@@ -4,6 +4,7 @@
 
 import { ApiError } from "./ebird.js";
 import { keepClearPhotos } from "./photocheck.js";
+import { commonsPhotos } from "./commons.js";
 
 const INAT = "https://api.inaturalist.org/v1";
 const UA = "BirdFlashcards/0.1 (https://github.com/rvlaurentx/bird-flashcards)";
@@ -122,14 +123,18 @@ async function localPhotos(taxonId, { lat, lng, month }) {
 export async function speciesMedia(sciName, comName, where = {}) {
   const taxon = await findTaxon(sciName, comName);
   if (!taxon) return { taxonId: null, photos: [], summary: null };
-  const [{ results = [] }, local] = await Promise.all([
+  const [{ results = [] }, local, commons] = await Promise.all([
     inat(`/taxa/${taxon.id}`),
     localPhotos(taxon.id, where).catch((e) => ({ photos: [], check: { ran: false, reason: `local search failed (${e.message})` } })),
+    commonsPhotos(sciName || taxon.name, comName),
   ]);
   const full = results[0] || taxon;
   const seen = new Set();
+  // Order: local in-season iNaturalist photos (checked), then Wikimedia
+  // Commons (article photo + Quality images; freely licensed), then
+  // iNaturalist's general species photos as a last resort.
   const general = [full.default_photo, ...(full.taxon_photos || []).map((tp) => tp.photo)].map(toPhoto);
-  const photos = [...local.photos, ...general]
+  const photos = [...local.photos, ...commons, ...general]
     .filter((p) => p && !seen.has(p.url) && seen.add(p.url)).slice(0, MAX_PHOTOS);
   return {
     taxonId: taxon.id,
@@ -139,6 +144,7 @@ export async function speciesMedia(sciName, comName, where = {}) {
     wikipediaUrl: full.wikipedia_url || null,
     // Diagnostics: how many local photos were found and what the check did.
     localPhotos: local.photos.length,
+    commonsPhotos: commons.length,
     photoCheck: local.check,
   };
 }

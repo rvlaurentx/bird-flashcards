@@ -23,7 +23,7 @@ function mediaFor(sp) {
 function photoCredit(ph) {
   return [
     ph.page ? el("a", { href: ph.page, target: "_blank", rel: "noopener" }, ph.attribution) : ph.attribution,
-    " · iNaturalist",
+    ` · ${ph.source || "iNaturalist"}`,
     ph.local && ph.context ? el("span", { class: "photo-where" }, ` · Taken ${ph.context}`) : null,
   ];
 }

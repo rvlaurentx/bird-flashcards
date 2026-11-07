@@ -9,7 +9,7 @@
 //   with no signal and doesn't wait on a weak one. Deck caches survive app
 //   updates; only the user removes them.
 
-const VERSION = "v20";
+const VERSION = "v21";
 const SHELL = `shell-${VERSION}`;
 const DATA = "data-v1";      // API responses; kept across app updates
 const FONTS = "fonts-v1";
@@ -37,7 +37,7 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(fromDeck(req).then((hit) => hit || networkFirst(req, DATA)));
   } else if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com") {
     e.respondWith(staleWhileRevalidate(req, FONTS));
-  } else if (/(^|\.)inaturalist\.org$|inaturalist-open-data\.s3\.amazonaws\.com$/.test(url.hostname)) {
+  } else if (/(^|\.)inaturalist\.org$|inaturalist-open-data\.s3\.amazonaws\.com$|^upload\.wikimedia\.org$/.test(url.hostname)) {
     e.respondWith(fromDeck(req).then((hit) => hit || cacheFirst(req, MEDIA)));
   } else if (url.origin === location.origin) {
     e.respondWith(shellNetworkFirst(req));
